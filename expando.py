@@ -83,7 +83,7 @@ def getAllObjects(given):
 class Expando(OrderedDict):
 	"""docstring for Expando."""
 	_hiddenAttr = ["value", "_val", "getattr",
-                "show", "_id", "__dict__", "startswith"]
+				"show", "_id", "__dict__", "startswith"]
 	_rootName = "xo"
 	_valueArg = "value"
 
@@ -483,7 +483,7 @@ class Expando(OrderedDict):
 			# if child not in final:
 				# final[child]
 			final[child] = self._xoT_(_id=final._id+"/"+child,
-                             _parent=final, _behaviors=final._behaviors)
+							 _parent=final, _behaviors=final._behaviors)
 			# else:
 			final = final[child]
 		# print(final,final._id)
@@ -1069,7 +1069,7 @@ class Expando(OrderedDict):
 				# print("@@@@@@@@")
 				# print(".............",self._id, newData["_id"] if "_id" in newData else "")
 			ddd = self._xoT_.__init__(self, _id=self._id, _val=self[self._valueArg] if "value" in self else None,
-                             _parent=self._parent, **newData)
+							 _parent=self._parent, **newData)
 			# ddd =  dict.__init__(self, *vars,**kwargs)
 			# print("tttttttx", ddd, type(ddd))
 			# self._convertAll()
@@ -1119,7 +1119,7 @@ class Expando(OrderedDict):
 					val = newData[key].pop("value")
 				#EX3
 				self[key] = self._xoT_(_id=self._id+"/"+key, _val=val,
-                                    _parent=self, _behaviors=self._behaviors, ** newData[key])
+									_parent=self, _behaviors=self._behaviors, ** newData[key])
 			else:
 				# print("DDDDDDDD",key)
 				# print("NNNNNNDDDDDDDD",key,type(self))
@@ -1136,7 +1136,7 @@ class Expando(OrderedDict):
 						#EX4
 						if key not in Expando._hiddenAttr and not key.startswith("_"):
 							self[key] = self._xoT_(_id=self._id+"/"+key, _val=val,
-							                       _parent=self, _behaviors=self._behaviors)
+												   _parent=self, _behaviors=self._behaviors)
 						else:
 							self[key] = val
 						# self[key] = val
@@ -1147,7 +1147,7 @@ class Expando(OrderedDict):
 					#EX5
 					if key not in Expando._hiddenAttr and not key.startswith("_"):
 						self[key] = self._xoT_(_id=self._id+"/"+key, _val=val,
-						                       _parent=self, _behaviors=self._behaviors)
+											   _parent=self, _behaviors=self._behaviors)
 					else:
 						self[key] = val
 					# print("fffffffff",type(self[key]))
@@ -1309,7 +1309,7 @@ class Expando(OrderedDict):
 
 
 	#iiiiiiiiiiiiiiii
-	def __init__(self, _val=None, _id=None, _parent=None, _behaviors={}, _xoT_=None, *vars, **entries):
+	def __init__(self, _val=None, _id=None, _parent=None,_rootName=None, _behaviors={}, _xoT_=None, *vars, **entries):
 		# dict.__init__(self,**entries)
 		# dict.__init__(self, *vars, **entries) #
 		super().__init__(self, *vars, **entries)
@@ -1323,10 +1323,14 @@ class Expando(OrderedDict):
 		# super().__init__(id = id, val = val)
 		
 		if _id is None:
-			print("ddddddddddddd",type(_xoT_))
+			print("ddddddddddddd",_xoT_)
 			_id = Expando._rootName
 			if _xoT_ is not None:
 				_id = _xoT_._rootName
+			if _rootName is not None:
+				_id = _rootName
+				#namespace
+				self._rootName = _rootName
 
 		self._id = _id if _id is not None else Expando._rootName
 		self._name = _id.split("/")[-1]
@@ -1446,8 +1450,8 @@ class Expando(OrderedDict):
 					pass
 					# print("EEEEEEEEEEEEEEEEEEEE1", name, value)
 				return self._behaviors[Expando.__setattr__](name, value, *args, **kwargs) \
-                                    if Expando.__setattr__ in self._behaviors \
-                                    else self.__setattr__(name, value, _skip_overload=True, *args, **kwargs)
+									if Expando.__setattr__ in self._behaviors \
+									else self.__setattr__(name, value, _skip_overload=True, *args, **kwargs)
 		# TODO: make _skip_overload not a thing, instead the overload will return (True, value) if it wants to continue the default behavior
 
 		# and "__skip" in self.__dict__ and name not in self.skip:
@@ -1472,7 +1476,7 @@ class Expando(OrderedDict):
 						#EX6
 						#final .x =
 						res = self._xoT_(_id=self._id+"/"+name, _val=value,
-						                 _parent=self, _behaviors=self._behaviors)
+										 _parent=self, _behaviors=self._behaviors)
 						# set hook
 						self[name] = res
 						# self[name]._setValue(res)
@@ -1547,7 +1551,7 @@ class Expando(OrderedDict):
 				return atr
 			# else:
 			self[name] = self._xoT_(_id=self._id+"/"+name, _parent=self,
-                           _behaviors=self._behaviors)
+						   _behaviors=self._behaviors)
 			return super().__getitem__(name)
 			return self[name]
 
@@ -1580,7 +1584,7 @@ class Expando(OrderedDict):
 			# self[name] = obj(id = self._id+"/"+name, parent = self)
 			#EX7
 			self[name] = self._xoT_(_id=self._id+"/"+name,
-			                        _parent=self, _behaviors=self._behaviors)
+									_parent=self, _behaviors=self._behaviors)
 			return self[name]
 		if name in self:
 			# atr = object.__getattribute__(self, name)
