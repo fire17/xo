@@ -2,6 +2,19 @@
 
 All notable XO changes are recorded here. Versions follow Semantic Versioning.
 
+## 0.2.2 — 2026-08-30
+
+### Fixed
+
+- Reject non-finite, non-numeric, boolean, and fractional timeout/bound configurations before opening Redis, RPC, or WebSocket resources.
+- Retire and cancel RPC stream requests when their client deadline expires instead of leaving a pending request until connection shutdown.
+- Reset JavaScript wire message IDs for every reconnected WebSocket session so a valid server sequence beginning at one is accepted.
+
+### Security
+
+- Gate Python and JavaScript registry publication on an explicit existing release tag whose complete Python and JavaScript CI matrix is already successful.
+
+
 ## 0.2.1 — 2026-08-30
 
 ### Fixed

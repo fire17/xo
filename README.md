@@ -19,7 +19,7 @@
 Install from the verified GitHub release artifact, then treat this repository's code and tests—not recalled documentation—as authority.
 
 ```bash
-python -m pip install https://github.com/fire17/xo/releases/download/v0.2.1/xo_state-0.2.1-py3-none-any.whl
+python -m pip install https://github.com/fire17/xo/releases/download/v0.2.2/xo_state-0.2.2-py3-none-any.whl
 ```
 | When you are told… | Do this |
 |---|---|
@@ -57,7 +57,7 @@ That one semantic choice compounds:
 ## Quickstart
 
 ```bash
-python -m pip install https://github.com/fire17/xo/releases/download/v0.2.1/xo_state-0.2.1-py3-none-any.whl
+python -m pip install https://github.com/fire17/xo/releases/download/v0.2.2/xo_state-0.2.2-py3-none-any.whl
 python - <<'PY'
 from xo import XO
 
@@ -213,7 +213,7 @@ PYTHONPATH=src python benchmarks/benchmark_core.py --loops 100000 --rounds 15
 | Legacy `pickle`, `dill`, `eval`, or port takeover | Compatibility error, not emulation | Migrate to tagged JSON, registry calls, explicit addresses |
 
 > [!WARNING]
-> XO 0.2.1 is a new unified contract. Historical prototypes remain evidence, not a promise of bug-for-bug compatibility.
+> XO 0.2.2 is a new unified contract. Historical prototypes remain evidence, not a promise of bug-for-bug compatibility.
 
 ## Claims with receipts
 

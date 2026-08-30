@@ -128,13 +128,21 @@ def test_endpoints_reject_non_loopback_and_unsafe_namespace() -> None:
         RedisBackend(namespace="app", strict=False)
 
 
-def test_limits_refuse_unbounded_or_zero_values() -> None:
+@pytest.mark.parametrize("value", [0, -1, 1.5, True, "1"])
+def test_limits_refuse_nonpositive_or_noninteger_values(value: object) -> None:
     with pytest.raises(ValueError, match="max_frame_bytes"):
-        RedisLimits(max_frame_bytes=0)
+        RedisLimits(max_frame_bytes=value)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="query_attempts"):
+        RedisBackend(query_attempts=value)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("value", [-1, 1.5, True, "1"])
+def test_reconnect_attempts_must_be_a_nonnegative_integer(value: object) -> None:
     with pytest.raises(ValueError, match="reconnect_attempts"):
-        RedisBackend(reconnect_attempts=-1)
-    with pytest.raises(ValueError, match="operation_timeout"):
-        RedisBackend(operation_timeout=0)
+        RedisBackend(reconnect_attempts=value)  # type: ignore[arg-type]
+
+
 
 
 def test_commit_uses_one_lua_cas_with_canonical_tagged_event() -> None:
@@ -271,6 +279,12 @@ def test_resp_reader_enforces_frame_array_and_nesting_limits() -> None:
     )
     with pytest.raises(RedisProtocolError, match="array length"):
         too_many.read_response()
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf"), True, "1"])
+def test_nonfinite_or_nonnumeric_durations_are_rejected(value: object) -> None:
+    with pytest.raises(ValueError, match="positive and finite"):
+        RedisBackend(connect_timeout=value)  # type: ignore[arg-type]
 
 
 def test_optional_real_redis_round_trip() -> None:

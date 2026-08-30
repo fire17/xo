@@ -1,6 +1,6 @@
 {
   "name": "@fire17/xo-state",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Dependency-free JavaScript peer for XO state",
   "type": "module",
   "repository": {

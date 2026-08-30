@@ -345,6 +345,10 @@ A candidate cannot release if it exceeds the legacy measured median on an equiva
 | concurrent local writers | root lock serializes mutations; deterministic revisions |
 | concurrent Redis writers | expected-revision Lua check; explicit conflict and resync |
 
+All numeric resource and duration configuration is validated before resource acquisition. Counts and byte bounds are positive integers (reconnect attempts alone may be zero); durations are numeric, finite, and greater than zero. `bool`, fractional counts, `NaN`, and infinities are rejected at construction rather than delegated to platform socket or thread behavior.
+
+RPC stream deadlines send a best-effort cancellation and retire the local pending request before raising. WebSocket message IDs are scoped to one connection and restart at one after reconnect; authored revision and event deduplication remain namespace-scoped across connections.
+
 ## Release construction
 
 1. Differentially characterize legacy behavior before replacing it.
@@ -354,3 +358,4 @@ A candidate cannot release if it exceeds the legacy measured median on an equiva
 5. Run real Redis, real socket, real Bun/JS, crash, concurrency, and performance suites.
 6. Package only after the source tree, wheel, and clean-venv install behave identically.
 7. Preserve all legacy sources read-only under provenance records; do not publish archived secrets or raw transcripts.
+8. Registry publishing accepts an explicit existing release tag only, verifies every Python/macOS/Linux and JavaScript CI check on that tag's immutable commit, then checks out and publishes that tag—not the workflow caller's branch.

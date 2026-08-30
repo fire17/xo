@@ -26,6 +26,8 @@ from .protocol import (
     bounded_credit,
     make_codec,
     parse_endpoint,
+    positive_finite,
+    positive_integer,
     recv_frame,
     send_frame,
     wire_path,
@@ -176,12 +178,13 @@ class Server:
             raise TypeError("Server registry must be a ServiceRegistry")
         if not namespace or "\x00" in namespace:
             raise ValueError("namespace must be a non-empty, NUL-free string")
-        if max_inflight <= 0 or max_stream_queue <= 0:
-            raise ValueError("RPC bounds must be positive")
-        if not 0 < default_credit <= max_stream_queue:
+        positive_integer(max_inflight, "max_inflight")
+        positive_integer(max_stream_queue, "max_stream_queue")
+        positive_integer(default_credit, "default_credit")
+        if default_credit > max_stream_queue:
             raise ValueError("default_credit must fit max_stream_queue")
-        if io_timeout <= 0 or close_timeout <= 0:
-            raise ValueError("RPC timeouts must be positive")
+        positive_finite(io_timeout, "io_timeout")
+        positive_finite(close_timeout, "close_timeout")
         self.registry = registry
         self.namespace = namespace
         self.endpoint = parse_endpoint(address)

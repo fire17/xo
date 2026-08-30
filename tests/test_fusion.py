@@ -34,10 +34,10 @@ class RecordingBackend:
         self.closed = True
 
 
-def test_full_fusion_uses_one_root_revision_and_owned_lifecycle(tmp_path) -> None:
+def test_full_fusion_uses_one_root_revision_and_owned_lifecycle() -> None:
     durable = RecordingBackend()
     projected: list[Event | EventGroup] = []
-    address = f"unix:///tmp/xo-fusion-{tmp_path.name}.sock"
+    address = ("127.0.0.1", 0)
     state = XO.recommended(
         "app",
         durability=backend(durable),
@@ -68,7 +68,7 @@ def test_full_fusion_uses_one_root_revision_and_owned_lifecycle(tmp_path) -> Non
     assert len(durable.events) == len(projected) == 1
     assert durable.events[0] == projected[0]
 
-    with Client(address, namespace="app") as client:
+    with Client(rpc.address, namespace="app") as client:
         assert client.current_count() == 1
 
     state.close()

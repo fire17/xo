@@ -147,10 +147,29 @@ def _tcp_endpoint(host: object, port: object) -> Endpoint:
 
 
 def make_codec(max_frame_bytes: int = DEFAULT_MAX_FRAME_BYTES) -> Codec:
-    if max_frame_bytes <= 0 or max_frame_bytes > 0xFFFFFFFF:
-        raise ValueError("max_frame_bytes must be between 1 and 2^32-1")
+    if (
+        not isinstance(max_frame_bytes, int)
+        or isinstance(max_frame_bytes, bool)
+        or not 0 < max_frame_bytes <= 0xFFFFFFFF
+    ):
+        raise ValueError("max_frame_bytes must be an integer between 1 and 2^32-1")
     return Codec(limits=CodecLimits(max_bytes=max_frame_bytes))
 
+
+def positive_finite(value: object, name: str) -> None:
+    if (
+        not isinstance(value, int | float)
+        or isinstance(value, bool)
+        or not math.isfinite(value)
+        or value <= 0
+    ):
+        raise ValueError(f"{name} must be positive and finite")
+
+
+
+def positive_integer(value: object, name: str) -> None:
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise ValueError(f"{name} must be a positive integer")
 
 def encode_frame(envelope: Envelope, *, codec: Codec, max_frame_bytes: int) -> bytes:
     validated = validate_envelope(envelope)

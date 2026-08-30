@@ -85,6 +85,8 @@ class Client {
 
   open(socket) {
     if (socket !== this.socket || this.closed) return;
+    this.incomingMid = 0;
+    this.outgoingMid = 0;
     this.transition("handshaking");
     this.send("hello", { protocol: PROTOCOL, min_protocol: PROTOCOL, schema: SCHEMA,
       origin_id: this.originId, client: "xo-js/1", role: this.role, token: this.token,

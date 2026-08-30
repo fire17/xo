@@ -36,6 +36,30 @@ jobs:
           uv pip install --python .artifact-venv/bin/python "$wheel"
           .artifact-venv/bin/python scripts/verify_python.py
 
+
+  redis:
+    name: Redis integration / Python 3.14
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+          enable-cache: true
+      - run: uv sync --dev
+      - run: uv run pytest tests/test_redis.py
+        env:
+          XO_TEST_REDIS_URL: redis://127.0.0.1:6379/0
   javascript:
     name: JavaScript peer / Bun
     runs-on: ubuntu-latest

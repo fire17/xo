@@ -2,16 +2,63 @@ name: Publish Python
 
 on:
   workflow_dispatch:
-
+    inputs:
+      tag:
+        description: Existing release tag to publish
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.tag.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: tag
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          case "$TAG" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "invalid release tag: $TAG" >&2; exit 1 ;; esac
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          sha="$(git rev-list -n 1 "$TAG")"
+          test -n "$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = '${{ steps.tag.outputs.sha }}';
+            const { data } = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: sha,
+              status: 'completed',
+              per_page: 100,
+            });
+            const required = [
+              'Python 3.11 / ubuntu-latest', 'Python 3.12 / ubuntu-latest',
+              'Python 3.13 / ubuntu-latest', 'Python 3.14 / ubuntu-latest',
+              'Python 3.11 / macos-latest', 'Python 3.12 / macos-latest',
+              'Python 3.13 / macos-latest', 'Python 3.14 / macos-latest',
+              'JavaScript peer / Bun',
+              'Redis integration / Python 3.14',
+            ];
+            const passed = new Set(data.check_runs.filter(run => run.conclusion === 'success').map(run => run.name));
+            const missing = required.filter(name => !passed.has(name));
+            if (missing.length) core.setFailed(`tag commit ${sha} lacks successful checks: ${missing.join(', ')}`);
+
   build:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
       - uses: astral-sh/setup-uv@v6
       - run: uv build
       - uses: actions/upload-artifact@v4

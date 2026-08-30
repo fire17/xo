@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import ipaddress
+import math
 import secrets
 import socket
 import threading
@@ -167,8 +168,9 @@ class RedisLimits:
             "max_catchup_batches",
             "dedupe_size",
         ):
-            if getattr(self, name) <= 0:
-                raise ValueError(f"{name} must be positive and bounded")
+            value = getattr(self, name)
+            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
 
 
 class RedisBackend:
@@ -213,16 +215,26 @@ class RedisBackend:
             ("reconnect_initial", reconnect_initial),
             ("reconnect_max", reconnect_max),
         ):
-            if value <= 0:
+            if (
+                not isinstance(value, int | float)
+                or isinstance(value, bool)
+                or not math.isfinite(value)
+                or value <= 0
+            ):
                 raise ValueError(f"{name} must be positive and finite")
-        if reconnect_attempts < 0:
-            raise ValueError("reconnect_attempts cannot be negative")
-        if query_attempts <= 0:
-            raise ValueError("query_attempts must be positive and bounded")
-        if snapshot_every <= 0:
-            raise ValueError("snapshot_every must be positive and bounded")
-        if schema_version <= 0:
-            raise ValueError("schema_version must be positive")
+        if (
+            not isinstance(reconnect_attempts, int)
+            or isinstance(reconnect_attempts, bool)
+            or reconnect_attempts < 0
+        ):
+            raise ValueError("reconnect_attempts must be a non-negative integer")
+        for name, value in (
+            ("query_attempts", query_attempts),
+            ("snapshot_every", snapshot_every),
+            ("schema_version", schema_version),
+        ):
+            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
         if epoch is not None and (not epoch or len(epoch.encode("utf-8")) > 256):
             raise ValueError("epoch must be a non-empty string of at most 256 bytes")
         self.url = url

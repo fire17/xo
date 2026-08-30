@@ -33,6 +33,8 @@ from .protocol import (
     make_codec,
     parse_endpoint,
     path_payload,
+    positive_finite,
+    positive_integer,
     recv_frame,
     send_frame,
 )
@@ -126,11 +128,22 @@ class Stream:
     def _receive(self) -> Envelope | BaseException:
         remaining = self._deadline - time.monotonic()
         if remaining <= 0:
+            self._expire()
             raise DeadlineExceeded("RPC stream deadline exceeded")
         try:
             return self._pending.messages.get(timeout=remaining)
         except queue.Empty as error:
+            self._expire()
             raise DeadlineExceeded("RPC stream deadline exceeded") from error
+
+    def _expire(self) -> None:
+        with contextlib.suppress(OSError, ProtocolError):
+            self._client._control(
+                "cancel",
+                self._request_id,
+                {"reason": "client deadline"},
+            )
+        self._finish()
 
     def _finish(self) -> None:
         if self._closed:
@@ -182,9 +195,11 @@ class Client:
             return
         if not namespace or "\x00" in namespace:
             raise ValueError("namespace must be a non-empty, NUL-free string")
-        if timeout <= 0 or close_timeout <= 0:
-            raise ValueError("RPC timeouts must be positive")
-        if not 0 < default_credit <= max_stream_queue:
+        positive_finite(timeout, "timeout")
+        positive_finite(close_timeout, "close_timeout")
+        positive_integer(default_credit, "default_credit")
+        positive_integer(max_stream_queue, "max_stream_queue")
+        if default_credit > max_stream_queue:
             raise ValueError("default_credit must fit max_stream_queue")
         self.endpoint = parse_endpoint(address)
         self.namespace = namespace
@@ -310,8 +325,7 @@ class Client:
         if self._closed.is_set():
             raise ClosedError("RPC client is closed")
         duration = self.timeout if timeout is None else timeout
-        if duration <= 0:
-            raise ValueError("RPC timeout must be positive")
+        positive_finite(duration, "timeout")
         request_id = self._ids.take()
         pending = _Pending(queue.Queue(maxsize=self.max_stream_queue + 3))
         with self._state_lock:

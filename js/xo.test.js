@@ -171,4 +171,37 @@ describe("XO JavaScript peer", () => {
     const { xo } = connected();
     await expect(xo.ui.name.set("blocked")).rejects.toBeInstanceOf(XOProtocolError);
   });
+  test("resets wire message IDs for each reconnect session", async () => {
+    const sockets = [];
+    const states = [];
+    current = createXO({
+      url: "ws://127.0.0.1:7802/xo",
+      namespace: "app",
+      token: TOKEN,
+      prefixes: [["ui"]],
+      minBackoff: 1,
+      maxBackoff: 1,
+      socketFactory: () => {
+        const socket = new FakeSocket();
+        sockets.push(socket);
+        return socket;
+      },
+      onState: (change) => states.push(change.state),
+    });
+
+    const first = sockets[0];
+    first.open();
+    first.deliver({ k: "welcome", mid: 1, ns: "app", p: { protocol: 1, schema: 1 } });
+    first.readyState = 3;
+    first.emit("close");
+    await Bun.sleep(5);
+
+    const second = sockets[1];
+    second.open();
+    expect(second.sent[0]).toMatchObject({ k: "hello", mid: 1 });
+    second.deliver({ k: "welcome", mid: 1, ns: "app", p: { protocol: 1, schema: 1 } });
+    expect(second.readyState).toBe(1);
+    expect(states.at(-1)).toBe("catching_up");
+  });
+
 });

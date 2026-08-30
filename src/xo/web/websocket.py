@@ -5,6 +5,7 @@ import contextlib
 import hashlib
 import hmac
 import ipaddress
+import math
 import queue
 import secrets
 import socket
@@ -75,7 +76,12 @@ class WebSocketLimits:
                 raise ValueError(f"{name} must be a positive integer")
         for name in ("handshake_timeout", "read_timeout", "write_timeout", "close_timeout"):
             value = getattr(self, name)
-            if not isinstance(value, int | float) or isinstance(value, bool) or value <= 0:
+            if (
+                not isinstance(value, int | float)
+                or isinstance(value, bool)
+                or not math.isfinite(value)
+                or value <= 0
+            ):
                 raise ValueError(f"{name} must be a positive finite duration")
 
 

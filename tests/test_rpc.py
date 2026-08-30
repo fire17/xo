@@ -126,6 +126,45 @@ def test_expired_call_is_rejected_without_invocation(tmp_path) -> None:
         assert not invoked.is_set()
 
 
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf"), True, "1"])
+def test_nonfinite_or_nonnumeric_timeouts_are_rejected(value: object) -> None:
+    with pytest.raises(ValueError, match="positive and finite"):
+        Server(ServiceRegistry(), ("127.0.0.1", 0), io_timeout=value)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="positive and finite"):
+        Client(("127.0.0.1", 1), timeout=value)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("value", [0, -1, 1.5, True, "1"])
+def test_rpc_bounds_must_be_positive_integers(value: object) -> None:
+    with pytest.raises(ValueError, match="max_inflight"):
+        Server(ServiceRegistry(), ("127.0.0.1", 0), max_inflight=value)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="max_stream_queue"):
+        Client(("127.0.0.1", 1), max_stream_queue=value)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="max_frame_bytes"):
+        Server(ServiceRegistry(), ("127.0.0.1", 0), max_frame_bytes=value)  # type: ignore[arg-type]
+
+
+def test_stream_deadline_retires_pending_request(tmp_path) -> None:
+    registry = ServiceRegistry()
+
+    @registry.expose("slow")
+    def slow():
+        time.sleep(0.1)
+        yield "late"
+
+    address = f"unix:///tmp/xo-rpc-{tmp_path.name}-stream-deadline.sock"
+    with (
+        Server(registry, address, namespace="deadline-stream"),
+        Client(address, namespace="deadline-stream", timeout=0.02) as client,
+    ):
+        stream = client.slow()
+        request_id = stream._request_id
+        with pytest.raises(Exception, match="deadline"):
+            next(stream)
+        assert request_id not in client._pending
+        stream.close()
+
+
 def test_non_loopback_addresses_are_refused() -> None:
     with pytest.raises(ValueError, match="non-loopback"):
         Server(ServiceRegistry(), ("192.0.2.1", 9000))

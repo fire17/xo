@@ -249,6 +249,12 @@ def test_malformed_unmasked_oversize_and_namespace_mismatch_fail_closed() -> Non
         state.close()
 
 
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf"), True, "1"])
+def test_nonfinite_or_nonnumeric_durations_are_rejected(value: object) -> None:
+    with pytest.raises(ValueError, match="positive finite"):
+        WebSocketLimits(read_timeout=value)  # type: ignore[arg-type]
+
+
 def test_bridge_refuses_non_loopback() -> None:
     with pytest.raises(ValueError, match="loopback"):
         XO.compose("app", websocket(host="0.0.0.0", token=TOKEN))
