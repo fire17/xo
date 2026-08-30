@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python ${{ matrix.python-version }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+      - run: uv sync --dev
+      - run: uv run pytest
+      - run: uv run ruff check src tests benchmarks
+      - run: uv run python -m compileall -q src tests benchmarks
+      - run: uv build
+      - name: Verify built wheel
+        shell: bash
+        run: |
+          wheel="$(find dist -name '*.whl' -print -quit)"
+          uv venv --clear .artifact-venv
+          uv pip install --python .artifact-venv/bin/python "$wheel"
+          .artifact-venv/bin/python scripts/verify_python.py
+
+  javascript:
+    name: JavaScript peer / Bun
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun test js/xo.test.js
+      - run: node --check js/xo.js
+      - run: bun pm pack --dry-run

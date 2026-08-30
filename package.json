@@ -1,0 +1,30 @@
+{
+  "name": "@fire17/xo-state",
+  "version": "0.1.0",
+  "description": "Dependency-free JavaScript peer for XO state",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fire17/xo.git"
+  },
+  "homepage": "https://fire17.github.io/xo/",
+  "bugs": "https://github.com/fire17/xo/issues",
+  "exports": {
+    ".": {
+      "import": "./js/xo.js",
+      "types": "./js/xo.d.ts"
+    }
+  },
+  "files": [
+    "js/xo.js",
+    "js/xo.d.ts"
+  ],
+  "scripts": {
+    "test": "bun test js/xo.test.js",
+    "pack:check": "bun pm pack --dry-run"
+  },
+  "engines": {
+    "bun": ">=1.2.0"
+  },
+  "license": "MIT"
+}

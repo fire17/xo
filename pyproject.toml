@@ -1,0 +1,74 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "xo-state"
+version = "0.1.0"
+description = "Local-first reactive state for Python, processes, services, and JavaScript"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Tami Bar" }]
+keywords = ["state", "reactive", "redis", "rpc", "websocket", "expando"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Typing :: Typed",
+]
+license-files = ["LICENSE"]
+dependencies = []
+
+[project.scripts]
+xo = "xo.cli:main"
+
+[project.urls]
+Repository = "https://github.com/fire17/xo"
+Documentation = "https://fire17.github.io/xo/"
+Issues = "https://github.com/fire17/xo/issues"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.12",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/xo"]
+only-include = ["src/xo"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src",
+  "/tests",
+  "/benchmarks",
+  "/README.md",
+  "/assets",
+  "/index.html",
+  "/ARCHITECTURE.md",
+  "/CHANGELOG.md",
+  "/CAPABILITIES.md",
+  "/PRODUCT.md",
+  "/DEVELOPMENT_PLAN.md",
+  "/ECOSYSTEM.md",
+  "/LICENSE",
+  "/vision_overhaul.md",
+  "/origins.md",
+]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
