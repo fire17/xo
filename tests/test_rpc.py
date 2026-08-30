@@ -144,25 +144,28 @@ def test_rpc_bounds_must_be_positive_integers(value: object) -> None:
         Server(ServiceRegistry(), ("127.0.0.1", 0), max_frame_bytes=value)  # type: ignore[arg-type]
 
 
-def test_stream_deadline_retires_pending_request(tmp_path) -> None:
+def test_stream_deadline_retires_pending_request() -> None:
     registry = ServiceRegistry()
+    release = threading.Event()
 
     @registry.expose("slow")
     def slow():
-        time.sleep(0.1)
+        yield "ready"
+        release.wait(timeout=1)
         yield "late"
 
-    address = f"unix:///tmp/xo-rpc-{tmp_path.name}-stream-deadline.sock"
     with (
-        Server(registry, address, namespace="deadline-stream"),
-        Client(address, namespace="deadline-stream", timeout=0.02) as client,
+        Server(registry, ("127.0.0.1", 0), namespace="deadline-stream") as server,
+        Client(server.address, namespace="deadline-stream", timeout=0.05) as client,
     ):
         stream = client.slow()
         request_id = stream._request_id
+        assert next(stream) == "ready"
         with pytest.raises(Exception, match="deadline"):
             next(stream)
         assert request_id not in client._pending
         stream.close()
+        release.set()
 
 
 def test_non_loopback_addresses_are_refused() -> None:
