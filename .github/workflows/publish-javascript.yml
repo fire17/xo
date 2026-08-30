@@ -34,7 +34,7 @@ jobs:
         with:
           script: |
             const sha = '${{ steps.tag.outputs.sha }}';
-            const { data } = await github.rest.checks.listForRef({
+            const runs = await github.paginate(github.rest.checks.listForRef, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               ref: sha,
@@ -49,7 +49,7 @@ jobs:
               'JavaScript peer / Bun',
               'Redis integration / Python 3.14',
             ];
-            const passed = new Set(data.check_runs.filter(run => run.conclusion === 'success').map(run => run.name));
+            const passed = new Set(runs.filter(run => run.conclusion === 'success').map(run => run.name));
             const missing = required.filter(name => !passed.has(name));
             if (missing.length) core.setFailed(`tag commit ${sha} lacks successful checks: ${missing.join(', ')}`);
 

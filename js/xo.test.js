@@ -171,6 +171,32 @@ describe("XO JavaScript peer", () => {
     const { xo } = connected();
     await expect(xo.ui.name.set("blocked")).rejects.toBeInstanceOf(XOProtocolError);
   });
+  test("returns rejected promises for invalid explicit writes", async () => {
+    const { xo, socket } = connected({ writable: true });
+    const before = socket.sent.length;
+
+    await expect(xo.ui.payload.set(Number.MAX_SAFE_INTEGER + 1)).rejects.toThrow(
+      "XO integers must be safe JavaScript integers",
+    );
+    await expect(xo.ui.payload.set(Symbol("invalid"))).rejects.toThrow(
+      "unsupported XO value type: symbol",
+    );
+    expect(socket.sent).toHaveLength(before);
+  });
+
+  test("reports failed assignment writes to subscribers", async () => {
+    const { xo } = connected();
+    const changes = [];
+    xo.subscribe((change) => changes.push(change));
+
+    xo.ui.name = "blocked";
+    await Bun.sleep(0);
+
+    expect(changes.at(-1)).toMatchObject({
+      kind: "error",
+      error: { code: "xo.auth.invalid" },
+    });
+  });
   test("resets wire message IDs for each reconnect session", async () => {
     const sockets = [];
     const states = [];

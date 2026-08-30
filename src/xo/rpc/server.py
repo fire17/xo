@@ -422,10 +422,10 @@ class _Connection:
             else:
                 self._call(message)
         except DeadlineExceeded as error:
-            self._error(message.message_id, error.code, str(error))
+            self._reply_error(message.message_id, error.code, str(error))
         except BaseException as error:
             code = getattr(error, "code", "xo.internal")
-            self._error(message.message_id, code, f"{type(error).__name__}: {error}")
+            self._reply_error(message.message_id, code, f"{type(error).__name__}: {error}")
         finally:
             self.inflight.release()
             with self.state_lock:
@@ -487,8 +487,11 @@ class _Connection:
                 self.streams.pop(message.message_id, None)
         if failure is not None:
             code = getattr(failure, "code", "xo.internal")
-            self._error(message.message_id, code, f"{type(failure).__name__}: {failure}")
-        self._send("end", message.message_id, {"reason": reason, "count": count})
+            self._reply_error(message.message_id, code, f"{type(failure).__name__}: {failure}")
+        try:
+            self._send("end", message.message_id, {"reason": reason, "count": count})
+        except OSError:
+            self.close()
 
     def _credit(self, message: Envelope) -> None:
         assert message.reply_to is not None and isinstance(message.payload, dict)
@@ -513,6 +516,12 @@ class _Connection:
     def _check_deadline(self, deadline: float | None) -> None:
         if deadline is not None and time.time() >= deadline:
             raise DeadlineExceeded("RPC deadline exceeded")
+
+    def _reply_error(self, rid: int, code: str, message: str) -> None:
+        try:
+            self._error(rid, code, message)
+        except OSError:
+            self.close()
 
     def _send(self, kind: str, rid: int, payload: dict[str, object]) -> None:
         if self.closing.is_set():

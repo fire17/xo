@@ -63,6 +63,10 @@ class Client {
     let socket;
     try { socket = this.socketFactory(this.url); }
     catch (error) { this.scheduleReconnect(error); return; }
+    if (!socket || typeof socket.addEventListener !== "function") {
+      this.scheduleReconnect(new TypeError("socketFactory must return a WebSocket-compatible object"));
+      return;
+    }
     this.socket = socket;
     socket.addEventListener("open", () => this.open(socket));
     socket.addEventListener("message", (event) => void this.message(socket, event));
@@ -216,10 +220,15 @@ class Client {
     if (this.role !== "writer") return Promise.reject(new XOProtocolError("xo.auth.invalid", "writes are disabled"));
     if (!this.ready || !this.socket || this.socket.readyState !== 1) return Promise.reject(connectionLost("offline writes are refused"));
     if (this.pending.size >= this.maxPending) return Promise.reject(new XOProtocolError("xo.backpressure", "pending write queue is full"));
-    const payload = { path, expected_revision: this.revision };
-    if (kind === "set") payload.value = encodeValue(value);
-    const mid = this.send(kind, payload);
-    return new Promise((resolvePromise, rejectPromise) => this.pending.set(mid, { resolve: resolvePromise, reject: rejectPromise }));
+    let payload;
+    try {
+      payload = { path, expected_revision: this.revision };
+      if (kind === "set") payload.value = encodeValue(value);
+      const mid = this.send(kind, payload);
+      return new Promise((resolvePromise, rejectPromise) => this.pending.set(mid, { resolve: resolvePromise, reject: rejectPromise }));
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   send(kind, payload, replyTo = undefined) {
@@ -273,8 +282,8 @@ function makeProxy(client, path, derived) {
       if (typeof property === "symbol") return undefined;
       return makeProxy(client, [...path, property], derived);
     },
-    set(_target, property, value) { if (derived) throw new XOProtocolError("xo.auth.invalid", "derived projections are read-only"); if (typeof property !== "string") throw new TypeError("XO keys must be strings"); void client.write("set", [...path, property], value); return true; },
-    deleteProperty(_target, property) { if (derived) throw new XOProtocolError("xo.auth.invalid", "derived projections are read-only"); if (typeof property !== "string") throw new TypeError("XO keys must be strings"); void client.write("delete", [...path, property]); return true; },
+    set(_target, property, value) { if (derived) throw new XOProtocolError("xo.auth.invalid", "derived projections are read-only"); if (typeof property !== "string") throw new TypeError("XO keys must be strings"); client.write("set", [...path, property], value).catch((error) => client.notify({ kind: "error", error })); return true; },
+    deleteProperty(_target, property) { if (derived) throw new XOProtocolError("xo.auth.invalid", "derived projections are read-only"); if (typeof property !== "string") throw new TypeError("XO keys must be strings"); client.write("delete", [...path, property]).catch((error) => client.notify({ kind: "error", error })); return true; },
     apply(_target, _this, args) { if (args.length === 0) return api.value; if (args.length === 1) return api.set(args[0]); throw new TypeError("XO node accepts zero arguments to read or one to write"); },
   });
 }
@@ -323,7 +332,7 @@ function toObject(record) { if (!record) return undefined; const result = Object
 
 function encodeValue(value, seen = new Set()) {
   if (value === null || typeof value === "string" || typeof value === "boolean") return value;
-  if (typeof value === "number") { if (!Number.isFinite(value)) throw new TypeError("XO numbers must be finite"); return value; }
+  if (typeof value === "number") { if (!Number.isFinite(value)) throw new TypeError("XO numbers must be finite"); if (Number.isInteger(value) && !Number.isSafeInteger(value)) throw new TypeError("XO integers must be safe JavaScript integers"); return value; }
   if (typeof value !== "object") throw new TypeError(`unsupported XO value type: ${typeof value}`);
   if (seen.has(value)) throw new TypeError("cyclic XO values are not supported"); seen.add(value);
   try { if (value instanceof Uint8Array) return { $xo: "bytes", value: bytesToBase64(value) }; if (Array.isArray(value)) return value.map((item) => encodeValue(item, seen)); const prototype = Object.getPrototypeOf(value); if (prototype !== Object.prototype && prototype !== null) throw new TypeError("XO values must be plain objects"); const result = Object.create(null); for (const [key, item] of Object.entries(value)) result[key] = encodeValue(item, seen); return result; } finally { seen.delete(value); }

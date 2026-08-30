@@ -62,6 +62,6 @@ assert app.user.value == "Tami"</code></pre></div></section>
     <section id="boundaries"><h2>The path stays the path.</h2><div class="path"><b>app.user.status</b> → event → history → Redis → RPC → JavaScript</div><p>One canonical tuple path and immutable event contract cross every capability. There is no parallel state engine hiding behind persistence or transport.</p></section>
     <section><div class="split"><div><h2>Measured, bounded, explicit.</h2><p>Local use starts no service and needs no dependency. Network frames, queues, streams, deadlines, and shutdown are bounded. Strict persistence fails before local visibility rather than pretending a write succeeded.</p></div><table><thead><tr><th>Operation</th><th>Median</th></tr></thead><tbody><tr><td>Existing read</td><td>0.325 µs</td></tr><tr><td>Scalar set</td><td>1.627 µs</td></tr><tr><td>Cached formula read</td><td>1.592 µs</td></tr></tbody></table></div></section>
   </main>
-  <footer>XO 0.2.2 · MIT · Python 3.11+ · <a href="https://github.com/fire17/xo">GitHub</a></footer>
+  <footer>XO 0.2.3 · MIT · Python 3.11+ · <a href="https://github.com/fire17/xo">GitHub</a></footer>
 </body>
 </html>

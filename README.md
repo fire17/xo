@@ -5,7 +5,7 @@
   [![Release](https://img.shields.io/github/v/release/fire17/xo?color=64dcff)](https://github.com/fire17/xo/releases)
   [![Python](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776ab)](https://github.com/fire17/xo/actions/workflows/ci.yml)
   [![Core dependencies](https://img.shields.io/badge/core%20dependencies-0-7e57c2)](pyproject.toml)
-  [![Python contracts](https://img.shields.io/badge/Python%20contracts-87-2ea44f)](tests)
+  [![Python contracts](https://img.shields.io/badge/Python%20contracts-116-2ea44f)](tests)
   [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
   [![GitHub stars](https://img.shields.io/github/stars/fire17/xo?style=social)](https://github.com/fire17/xo/stargazers)
 
@@ -19,7 +19,7 @@
 Install from the verified GitHub release artifact, then treat this repository's code and tests—not recalled documentation—as authority.
 
 ```bash
-python -m pip install https://github.com/fire17/xo/releases/download/v0.2.2/xo_state-0.2.2-py3-none-any.whl
+python -m pip install https://github.com/fire17/xo/releases/download/v0.2.3/xo_state-0.2.3-py3-none-any.whl
 ```
 | When you are told… | Do this |
 |---|---|
@@ -57,7 +57,7 @@ That one semantic choice compounds:
 ## Quickstart
 
 ```bash
-python -m pip install https://github.com/fire17/xo/releases/download/v0.2.2/xo_state-0.2.2-py3-none-any.whl
+python -m pip install https://github.com/fire17/xo/releases/download/v0.2.3/xo_state-0.2.3-py3-none-any.whl
 python - <<'PY'
 from xo import XO
 
@@ -213,15 +213,15 @@ PYTHONPATH=src python benchmarks/benchmark_core.py --loops 100000 --rounds 15
 | Legacy `pickle`, `dill`, `eval`, or port takeover | Compatibility error, not emulation | Migrate to tagged JSON, registry calls, explicit addresses |
 
 > [!WARNING]
-> XO 0.2.2 is a new unified contract. Historical prototypes remain evidence, not a promise of bug-for-bug compatibility.
+> XO 0.2.3 is a new unified contract. Historical prototypes remain evidence, not a promise of bug-for-bug compatibility.
 
 ## Claims with receipts
 
 | Gate | Observed result |
 |---|---|
-| Python behavioral contracts | **87 collected; 86 passed, 1 disposable-Redis test skipped without `XO_TEST_REDIS_URL`** |
+| Python behavioral contracts | **116 collected; 115 passed, 1 disposable-Redis test skipped without `XO_TEST_REDIS_URL`** |
 | Real Redis integration | Dedicated loopback Redis server; integration scenario passed |
-| JavaScript peer | **4 tests, 19 assertions, 0 failures** |
+| JavaScript peer | **7 tests, 30 assertions, 0 failures** |
 | Static checks | Ruff clean; Python bytecode compilation clean; Node syntax check clean |
 | Artifacts | Python wheel + source distribution built; JavaScript package dry-pack built |
 | Clean install | Wheel installed into a fresh Python 3.14 environment; end-to-end scenario passed |

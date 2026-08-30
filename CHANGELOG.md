@@ -2,6 +2,15 @@
 
 All notable XO changes are recorded here. Versions follow Semantic Versioning.
 
+## 0.2.3 — 2026-08-30
+
+### Fixed
+
+- Keep JavaScript explicit writes promise-stable when value encoding or socket sends fail, and surface assignment/delete failures through subscriptions instead of unhandled rejections.
+- Reject unsafe JavaScript integers before transport so Python/JavaScript state cannot silently lose numeric precision.
+- Treat client disconnects during RPC stream termination as normal cleanup instead of leaking worker-thread exceptions.
+- Verify every completed check run on a release tag, not only the first GitHub API page, before publishing either package.
+
 ## 0.2.2 — 2026-08-30
 
 ### Fixed
