@@ -157,7 +157,7 @@ class Client {
       const error = new XOProtocolError(String(payload.code), String(payload.message), payload.detail ?? {});
       if (envelope.rid !== undefined && this.pending.has(envelope.rid)) { this.reject(envelope.rid, error); return; }
       if (payload.code === "xo.resync_required") { this.revision = 0; return; }
-      if (String(payload.code).startsWith("xo.protocol.") || payload.code === "xo.auth.invalid") throw error;
+      if (String(payload.code).startsWith("xo.protocol.") || String(payload.code).startsWith("xo.codec.") || payload.code === "xo.auth.invalid") throw error;
       this.notify({ kind: "error", error });
       return;
     }
@@ -184,7 +184,7 @@ class Client {
     }
     this.revision = targetRevision;
     this.send("ack", { mode: "event", revision: this.revision, event_id: events[0].eventId });
-    this.notify({ kind: events.length === 1 ? "event" : "tx", events, revision: this.revision });
+    this.notify({ kind: events.length === 1 ? "event" : "tx", events, path: events.length === 1 ? events[0].path : undefined, revision: this.revision });
   }
 
   rememberEvent(eventId) {
@@ -216,19 +216,36 @@ class Client {
     this.revision = revision;
   }
 
-  write(kind, path, value) {
+  request(kind, payload) {
     if (this.role !== "writer") return Promise.reject(new XOProtocolError("xo.auth.invalid", "writes are disabled"));
     if (!this.ready || !this.socket || this.socket.readyState !== 1) return Promise.reject(connectionLost("offline writes are refused"));
     if (this.pending.size >= this.maxPending) return Promise.reject(new XOProtocolError("xo.backpressure", "pending write queue is full"));
-    let payload;
     try {
-      payload = { path, expected_revision: this.revision };
-      if (kind === "set") payload.value = encodeValue(value);
-      const mid = this.send(kind, payload);
+      const mid = this.send(kind, { ...payload, expected_revision: this.revision });
       return new Promise((resolvePromise, rejectPromise) => this.pending.set(mid, { resolve: resolvePromise, reject: rejectPromise }));
     } catch (error) {
       return Promise.reject(error);
     }
+  }
+
+  write(kind, path, value) {
+    let payload;
+    try {
+      payload = { path };
+      if (kind === "set") payload.value = encodeValue(value);
+      if (kind === "restore") payload.node = encodeImage(value);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    return this.request(kind, payload);
+  }
+
+  writeMany(operations) {
+    if (!Array.isArray(operations) || operations.length === 0) return Promise.reject(new TypeError("operations must be a non-empty array"));
+    let encoded;
+    try { encoded = operations.map(encodeOperation); }
+    catch (error) { return Promise.reject(error); }
+    return this.request("tx", { operations: encoded });
   }
 
   send(kind, payload, replyTo = undefined) {
@@ -249,35 +266,53 @@ class Client {
     this.attempt += 1; this.transition("backoff", error);
     this.timer = setTimeout(() => { this.timer = null; this.connect(); }, delay);
   }
-  fail(error) { const socket = this.socket; if (socket && socket.readyState < 2) socket.close(1002, String(error.code).slice(0, 123)); this.disconnect(socket, error); }
+  fail(error) { const socket = this.socket; this.disconnect(socket, error); if (socket && socket.readyState < 2) socket.close(1002, String(error.code).slice(0, 123)); }
   rejectPending(error) { for (const pending of this.pending.values()) pending.reject(error); this.pending.clear(); }
-  subscribe(callback) {
+  subscribe(callback, path = []) {
     if (typeof callback !== "function") throw new TypeError("subscriber must be callable");
-    this.listeners.add(callback); let active = true;
-    const close = () => { if (active) { active = false; this.listeners.delete(callback); } };
+    const listener = { callback, path: [...path] };
+    this.listeners.add(listener); let active = true;
+    const close = () => { if (active) { active = false; this.listeners.delete(listener); } };
     return Object.freeze({ close, cancel: close });
   }
-  notify(change) { for (const callback of [...this.listeners]) { try { callback(change); } catch (_) {} } }
+  notify(change) {
+    for (const listener of [...this.listeners]) {
+      if (change.path && !isPrefix(listener.path, change.path)) continue;
+      if (change.events && !change.events.some((event) => isPrefix(listener.path, event.path))) continue;
+      try { listener.callback(change); } catch (_) {}
+    }
+  }
   transition(state, error = undefined) { if (this.onState) this.onState({ state, error, revision: this.revision }); }
 }
 
 function makeProxy(client, path, derived) {
+  const tree = () => derived ? client.derivedRoot : client.root;
   const api = {
     get path() { return Object.freeze([...path]); },
-    get exists() { return resolve(derived ? client.derivedRoot : client.root, path, false) !== null; },
-    get hasValue() { const record = resolve(derived ? client.derivedRoot : client.root, path, false); return record !== null && record.value !== MISSING; },
-    get value() { const record = resolve(derived ? client.derivedRoot : client.root, path, false); return record === null || record.value === MISSING ? undefined : record.value; },
+    get revision() { return client.revision; },
+    get exists() { return resolve(tree(), path, false) !== null; },
+    get hasValue() { const record = resolve(tree(), path, false); return record !== null && record.value !== MISSING; },
+    get value() { const record = resolve(tree(), path, false); return record === null || record.value === MISSING ? undefined : record.value; },
+    get keys() { const record = resolve(tree(), path, false); return Object.freeze(record ? [...record.children.keys()] : []); },
+    get values() { const record = resolve(tree(), path, false); return Object.freeze(record ? [...record.children.values()].map((child) => child.value === MISSING ? undefined : child.value) : []); },
+    get entries() { const record = resolve(tree(), path, false); return Object.freeze(record ? [...record.children].map(([key, child]) => Object.freeze([key, child.value === MISSING ? undefined : child.value])) : []); },
+    get(value = undefined) { const record = resolve(tree(), path, false); return record === null || record.value === MISSING ? value : record.value; },
     set(value) { return derived ? Promise.reject(new XOProtocolError("xo.auth.invalid", "derived projections are read-only")) : client.write("set", path, value); },
+    clear() { return derived ? Promise.reject(new XOProtocolError("xo.auth.invalid", "derived projections are read-only")) : client.write("clear", path); },
     delete() { if (derived) return Promise.reject(new XOProtocolError("xo.auth.invalid", "derived projections are read-only")); if (path.length === 0) return Promise.reject(new XOProtocolError("xo.path.invalid", "root cannot be deleted")); return client.write("delete", path); },
+    restore(image) { return derived ? Promise.reject(new XOProtocolError("xo.auth.invalid", "derived projections are read-only")) : client.write("restore", path, image); },
+    transaction(operations) { return derived ? Promise.reject(new XOProtocolError("xo.auth.invalid", "derived projections are read-only")) : client.writeMany(operations); },
     at(extra) { return makeProxy(client, [...path, ...normalizePath(extra)], derived); },
-    subscribe(callback) { return client.subscribe(callback); },
-    toJSON() { return toObject(resolve(derived ? client.derivedRoot : client.root, path, false)); },
+    has(extra) { return resolve(tree(), [...path, ...normalizePath(extra)], false) !== null; },
+    subscribe(callback) { return client.subscribe(callback, path); },
+    toJSON() { return toObject(resolve(tree(), path, false)); },
   };
   return new Proxy(function xoNode() {}, {
     get(_target, property) {
       if (property === INTERNAL) return client;
       if (property === "then") return undefined;
       if (property === "derived" && path.length === 0 && !derived) return client.derivedProxy;
+      if (property === Symbol.iterator) return function* iterate() { for (const key of api.keys) yield key; };
       if (property in api) { const value = api[property]; return typeof value === "function" ? value.bind(api) : value; }
       if (typeof property === "symbol") return undefined;
       return makeProxy(client, [...path, property], derived);
@@ -329,6 +364,33 @@ function decodeImage(value) {
 
 function resolve(root, path, create) { let record = root; for (const segment of path) { let child = record.children.get(segment); if (!child) { if (!create) return null; child = new Record(); record.children.set(segment, child); } record = child; } return record; }
 function toObject(record) { if (!record) return undefined; const result = Object.create(null); for (const [key, child] of record.children) result[key] = toObject(child); if (record.value !== MISSING) result.$value = record.value; return result; }
+
+function encodeImage(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("snapshot node must be an object");
+  const children = value.$children;
+  if (!Array.isArray(children)) throw new TypeError("snapshot node children must be an array");
+  const result = { $children: [] };
+  if (Object.hasOwn(value, "$value")) result.$value = encodeValue(value.$value);
+  const names = new Set();
+  for (const entry of children) {
+    if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== "string" || entry[0].length === 0) throw new TypeError("invalid snapshot child");
+    if (names.has(entry[0])) throw new TypeError(`duplicate snapshot child: ${entry[0]}`);
+    names.add(entry[0]); result.$children.push([entry[0], encodeImage(entry[1])]);
+  }
+  return result;
+}
+
+function encodeOperation(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("transaction operation must be an object");
+  const kind = String(value.kind);
+  if (!["set", "clear", "delete", "restore"].includes(kind)) throw new TypeError(`unsupported write operation: ${kind}`);
+  const operation = { kind, path: normalizePath(value.path) };
+  if (kind === "set") operation.value = encodeValue(value.value);
+  if (kind === "restore") operation.node = encodeImage(value.node);
+  return operation;
+}
+
+function isPrefix(prefix, path) { return prefix.length <= path.length && prefix.every((segment, index) => segment === path[index]); }
 
 function encodeValue(value, seen = new Set()) {
   if (value === null || typeof value === "string" || typeof value === "boolean") return value;

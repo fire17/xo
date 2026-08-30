@@ -17,6 +17,8 @@ This classification separates the product primitive, supported capability layers
 | bounded streaming RPC | supported layer | later MagicLight embedded variant | `xo.rpc.Stream` |
 | Python/JavaScript state sync | supported layer | `JS.py`, `freshSvelt/` | `xo.web`, `js/xo.js` |
 
+Language-level semantics, host-only capabilities, current parity evidence, and future binding admission gates are maintained in [`LANGUAGE_SUPPORT.md`](LANGUAGE_SUPPORT.md). That executable map is the source of truth for support claims.
+
 ## Developer tooling
 
 Tooling observes and operates the product but does not define alternate behavior.

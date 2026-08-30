@@ -297,6 +297,8 @@ Handshake:
 
 Browser writes are opt-in per bridge and may be limited to path prefixes. HTML rendering remains an application decision. The old remote `eval` path is deliberately not preserved because it turns any connected writer into arbitrary browser code execution.
 
+The complete per-language capability and conformance contract lives in [`LANGUAGE_SUPPORT.md`](LANGUAGE_SUPPORT.md). CI must exercise a real Python host and JavaScript process against the same namespace; mocked socket tests alone do not establish parity.
+
 ## Compatibility surface
 
 Observed names map to the unified implementation:

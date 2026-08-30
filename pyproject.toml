@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "xo-state"
-version = "0.2.3"
+version = "0.3.0"
 description = "Local-first reactive state for Python, processes, services, and JavaScript"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -54,6 +54,7 @@ include = [
   "/ARCHITECTURE.md",
   "/CHANGELOG.md",
   "/CAPABILITIES.md",
+  "/LANGUAGE_SUPPORT.md",
   "/PRODUCT.md",
   "/DEVELOPMENT_PLAN.md",
   "/ECOSYSTEM.md",

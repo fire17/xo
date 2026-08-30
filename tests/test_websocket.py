@@ -162,6 +162,119 @@ def test_browser_writes_use_canonical_root_pipeline_and_expected_revision() -> N
         sock.close()
         state.close()
 
+def test_browser_clear_restore_and_atomic_transaction_match_python_semantics() -> None:
+    state, bridge = _start(writable=True)
+    state.ui.keep = "child"
+    state.ui = "parent"
+    sock = _connect(bridge)
+    try:
+        assert _hello(sock, role="writer").kind == "welcome"
+        _send(sock, Envelope("sub", 2, "app", {"prefixes": [["ui"]], "since_revision": 0}))
+        assert _recv(sock).kind == "snapshot"
+        assert _recv(sock).kind == "ack"
+
+        _send(
+            sock,
+            Envelope(
+                "clear",
+                3,
+                "app",
+                {"path": ["ui"], "expected_revision": 2},
+            ),
+        )
+        messages = [_recv(sock), _recv(sock)]
+        clear_event = next(message for message in messages if message.kind == "event")
+        clear_ack = next(message for message in messages if message.kind == "ack")
+        assert clear_event.payload["operation"] == "clear_value"
+        assert clear_ack.payload["count"] == 1
+        assert not state.ui.has_value
+        assert state.ui.keep.value == "child"
+
+        _send(
+            sock,
+            Envelope(
+                "restore",
+                4,
+                "app",
+                {
+                    "path": ["ui"],
+                    "node": {
+                        "$value": "restored",
+                        "$children": [["child", {"$value": 7, "$children": []}]],
+                    },
+                    "expected_revision": 3,
+                },
+            ),
+        )
+        restore_messages = [_recv(sock), _recv(sock)]
+        assert {message.kind for message in restore_messages} == {"event", "ack"}
+        assert state.ui.value == "restored"
+        assert state.ui["child"].value == 7
+        assert state.peek("ui.keep") is None
+
+        _send(
+            sock,
+            Envelope(
+                "tx",
+                5,
+                "app",
+                {
+                    "operations": [
+                        {"kind": "set", "path": ["ui", "a"], "value": 1},
+                        {"kind": "set", "path": ["ui", "b"], "value": 2},
+                        {"kind": "clear", "path": ["ui", "child"]},
+                    ],
+                    "expected_revision": 4,
+                },
+            ),
+        )
+        tx_messages = [_recv(sock), _recv(sock)]
+        transaction = next(message for message in tx_messages if message.kind == "tx")
+        acknowledgement = next(message for message in tx_messages if message.kind == "ack")
+        assert len(transaction.payload["events"]) == 3
+        assert {event["revision"] for event in transaction.payload["events"]} == {5}
+        assert acknowledgement.payload["count"] == 3
+        assert (state.ui.a.value, state.ui.b.value) == (1, 2)
+        assert state.ui["child"].exists and not state.ui["child"].has_value
+        assert state.revision == 5
+    finally:
+        sock.close()
+        state.close()
+
+
+def test_browser_transaction_is_atomic_when_any_operation_fails() -> None:
+    state, bridge = _start(writable=True)
+    state.ui.existing = "kept"
+    sock = _connect(bridge)
+    try:
+        assert _hello(sock, role="writer").kind == "welcome"
+        _send(sock, Envelope("sub", 2, "app", {"prefixes": [["ui"]], "since_revision": 0}))
+        _recv(sock)
+        _recv(sock)
+        _send(
+            sock,
+            Envelope(
+                "tx",
+                3,
+                "app",
+                {
+                    "operations": [
+                        {"kind": "set", "path": ["ui", "existing"], "value": "changed"},
+                        {"kind": "delete", "path": ["ui", "missing"]},
+                    ],
+                    "expected_revision": 1,
+                },
+            ),
+        )
+        error = _recv(sock)
+        assert error.kind == "error"
+        assert error.payload["code"] == "xo.not_found"
+        assert state.ui.existing.value == "kept"
+        assert state.revision == 1
+    finally:
+        sock.close()
+        state.close()
+
 
 def test_derived_projection_never_mutates_source_or_revision() -> None:
     state, bridge = _start()

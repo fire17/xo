@@ -19,7 +19,7 @@
 Install from the verified GitHub release artifact, then treat this repository's code and tests—not recalled documentation—as authority.
 
 ```bash
-python -m pip install https://github.com/fire17/xo/releases/download/v0.2.3/xo_state-0.2.3-py3-none-any.whl
+python -m pip install https://github.com/fire17/xo/releases/download/v0.3.0/xo_state-0.3.0-py3-none-any.whl
 ```
 | When you are told… | Do this |
 |---|---|
@@ -57,7 +57,7 @@ That one semantic choice compounds:
 ## Quickstart
 
 ```bash
-python -m pip install https://github.com/fire17/xo/releases/download/v0.2.3/xo_state-0.2.3-py3-none-any.whl
+python -m pip install https://github.com/fire17/xo/releases/download/v0.3.0/xo_state-0.3.0-py3-none-any.whl
 python - <<'PY'
 from xo import XO
 
@@ -181,6 +181,8 @@ closeXO(xo);
 ```
 
 Authored state follows contiguous revisions and reconnects through catch-up or snapshot. Formula projections remain derived: they do not advance source revision, enter history, or write into the source tree.
+
+Python and JavaScript share set, clear, delete, subtree restore, atomic multi-operation transactions, ordered traversal, path-scoped subscriptions, canonical values, and one revision line. See the release-gating [language support and parity map](LANGUAGE_SUPPORT.md) for exact host-versus-peer boundaries and future binding admission rules.
 </details>
 
 ## Performance without a hidden tax
@@ -213,19 +215,20 @@ PYTHONPATH=src python benchmarks/benchmark_core.py --loops 100000 --rounds 15
 | Legacy `pickle`, `dill`, `eval`, or port takeover | Compatibility error, not emulation | Migrate to tagged JSON, registry calls, explicit addresses |
 
 > [!WARNING]
-> XO 0.2.3 is a new unified contract. Historical prototypes remain evidence, not a promise of bug-for-bug compatibility.
+> XO 0.3.0 is a new unified contract. Historical prototypes remain evidence, not a promise of bug-for-bug compatibility.
 
 ## Claims with receipts
 
 | Gate | Observed result |
 |---|---|
-| Python behavioral contracts | **116 collected; 115 passed, 1 disposable-Redis test skipped without `XO_TEST_REDIS_URL`** |
+| Python behavioral contracts | **122 collected; 121 passed, 1 disposable-Redis test skipped without `XO_TEST_REDIS_URL`** |
 | Real Redis integration | Dedicated loopback Redis server; integration scenario passed |
-| JavaScript peer | **7 tests, 30 assertions, 0 failures** |
-| Static checks | Ruff clean; Python bytecode compilation clean; Node syntax check clean |
+| JavaScript peer | **9 tests, 53 assertions, 0 failures** |
+| Live language parity | Real Python host + Bun process exchanged set, clear, delete, restore, atomic transaction, bytes, tuple, and post-peer writes in one namespace |
+| Static checks | Ruff clean; Python bytecode compilation clean; Node syntax checks clean |
 | Artifacts | Python wheel + source distribution built; JavaScript package dry-pack built |
-| Clean install | Wheel installed into a fresh Python 3.14 environment; end-to-end scenario passed |
-| State-bound evidence | JJK state `st_01m18xg91qeyh8nzhrk8a9kdw3` records passing test, lint, build, and pack validations |
+| Performance | All six portable budgets passed; 17.695 ms import, 0.352 µs read, 1.499 µs set, 1.568 µs formula read |
+| State-bound evidence | Final JJK state recorded after all release gates pass |
 
 CI repeats the portable Python 3.11–3.14 matrix on Ubuntu and macOS plus the Bun peer checks on every push and pull request.
 

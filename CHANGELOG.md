@@ -2,6 +2,18 @@
 
 All notable XO changes are recorded here. Versions follow Semantic Versioning.
 
+## 0.3.0 — 2026-08-30
+
+### Added
+
+- A durable release-gating language support map, shared cross-language fixture, and real bidirectional Python↔JavaScript same-namespace conformance test.
+- JavaScript clear-value, subtree restore, ordered traversal, containment, default reads, path-scoped subscriptions, and atomic multi-operation transactions.
+
+### Fixed
+
+- Keep canonical root handles usable after authoritative snapshot installation.
+- Reject Python integers that cannot cross into JavaScript without precision loss instead of emitting lossy JSON.
+
 ## 0.2.3 — 2026-08-30
 
 ### Fixed

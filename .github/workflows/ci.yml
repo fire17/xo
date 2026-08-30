@@ -69,5 +69,11 @@ jobs:
         with:
           bun-version: latest
       - run: bun test js/xo.test.js
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+          enable-cache: true
+      - run: uv sync --dev
+      - run: uv run pytest tests/test_language_parity.py
       - run: node --check js/xo.js
       - run: bun pm pack --dry-run

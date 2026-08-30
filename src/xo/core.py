@@ -507,8 +507,16 @@ class XO(MutableMapping[str, "XO"]):
         with root.lock:
             if root.closed:
                 raise ClosedError(f"XO namespace {root.namespace!r} is closed")
-            root.detach(root.record)
+            previous = root.record
             root.record = replacement
+            if previous is not replacement:
+                for child in previous.children.values():
+                    root.detach(child)
+                previous.value = replacement.value
+                previous.children = replacement.children
+                previous.value_revision = replacement.value_revision
+                previous.attached = True
+                root.record = previous
             root.revision = revision
             root.seen_events.clear()
             root.seen_order.clear()

@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import { closeXO, createXO, XOProtocolError } from "./xo.js";
+
+const PARITY_FIXTURE = JSON.parse(
+  readFileSync(new URL("../tests/fixtures/language_parity.json", import.meta.url), "utf8"),
+);
 
 class FakeSocket {
   constructor() {
@@ -89,6 +94,28 @@ function connected({ writable = false } = {}) {
   return { xo: current, socket, states };
 }
 
+function fixtureSnapshot() {
+  const socket = new FakeSocket();
+  current = createXO({
+    url: "ws://127.0.0.1:7802/xo",
+    namespace: PARITY_FIXTURE.namespace,
+    token: TOKEN,
+    prefixes: [[]],
+    socketFactory: () => socket,
+    reconnect: false,
+  });
+  socket.open();
+  socket.deliver({ k: "welcome", mid: 1, ns: PARITY_FIXTURE.namespace, p: { protocol: 1, schema: 1 } });
+  socket.deliver({
+    k: "snapshot",
+    mid: 2,
+    ns: PARITY_FIXTURE.namespace,
+    p: { schema: "xo.snapshot", version: 1, namespace: PARITY_FIXTURE.namespace, revision: 0, root: PARITY_FIXTURE.initial },
+  });
+  socket.deliver({ k: "ack", mid: 3, ns: PARITY_FIXTURE.namespace, rid: 2, p: { mode: "snapshot", revision: 0, count: 0 } });
+  return current;
+}
+
 function eventEnvelope(mid, revision, path, value) {
   return {
     k: "event",
@@ -108,6 +135,14 @@ function eventEnvelope(mid, revision, path, value) {
 }
 
 describe("XO JavaScript peer", () => {
+  test("consumes the shared value-plus-children fixture", () => {
+    const xo = fixtureSnapshot();
+    expect(xo.shared.value).toBe("parent");
+    expect(xo.shared.counter.value).toBe(1);
+    expect(xo.shared.clearable.value).toBe("remove-value");
+    expect(xo.shared.clearable.kept.value).toBe(true);
+    expect(xo.shared.keys).toEqual(["counter", "clearable", "deletable"]);
+  });
   test("hydrates snapshots and applies contiguous authored events", () => {
     const { xo, socket, states } = connected();
     const changes = [];
@@ -196,6 +231,64 @@ describe("XO JavaScript peer", () => {
       kind: "error",
       error: { code: "xo.auth.invalid" },
     });
+  });
+
+  test("matches node reads, iteration, scoped subscriptions, clear, restore, and atomic writes", async () => {
+    const { xo, socket } = connected({ writable: true });
+    expect(xo.revision).toBe(0);
+    expect(xo.ui.get("missing")).toBe("missing");
+    expect(xo.ui.keys).toEqual(["count"]);
+    expect([...xo.ui]).toEqual(["count"]);
+    expect(xo.ui.has("count")).toBe(true);
+    expect(xo.ui.entries).toEqual([["count", 1]]);
+
+    const scoped = [];
+    xo.ui.subscribe((change) => scoped.push(change));
+    socket.deliver(eventEnvelope(4, 1, ["other", "ignored"], 1));
+    expect(scoped).toHaveLength(0);
+    socket.deliver(eventEnvelope(5, 2, ["ui", "count"], 2));
+    expect(scoped).toHaveLength(1);
+
+    const clear = xo.ui.count.clear();
+    const clearRequest = socket.sent.at(-1);
+    expect(clearRequest).toMatchObject({ k: "clear", p: { path: ["ui", "count"], expected_revision: 2 } });
+    socket.deliver({
+      k: "event", mid: 6, ns: "app", p: {
+        event_id: "3", namespace: "app", origin_id: "2", base_revision: 2,
+        revision: 3, operation: "clear_value", path: ["ui", "count"], payload: {},
+      },
+    });
+    socket.deliver({ k: "ack", mid: 7, ns: "app", rid: clearRequest.mid, p: { mode: "write", revision: 3, event_id: "3", count: 1 } });
+    await expect(clear).resolves.toMatchObject({ revision: 3 });
+    expect(xo.ui.count.exists).toBe(true);
+    expect(xo.ui.count.hasValue).toBe(false);
+
+    const tx = xo.transaction([
+      { kind: "set", path: ["ui", "first"], value: 1 },
+      { kind: "set", path: "ui.second", value: new Uint8Array([1, 2]) },
+    ]);
+    const txRequest = socket.sent.at(-1);
+    expect(txRequest).toMatchObject({
+      k: "tx",
+      p: {
+        expected_revision: 3,
+        operations: [
+          { kind: "set", path: ["ui", "first"], value: 1 },
+          { kind: "set", path: ["ui", "second"], value: { $xo: "bytes", value: "AQI=" } },
+        ],
+      },
+    });
+    socket.deliver({ k: "ack", mid: 8, ns: "app", rid: txRequest.mid, p: { mode: "write", revision: 4, event_id: "4", count: 2 } });
+    await expect(tx).resolves.toMatchObject({ revision: 4, count: 2 });
+
+    const restore = xo.ui.restore({ $value: "parent", $children: [["child", { $value: 7, $children: [] }]] });
+    const restoreRequest = socket.sent.at(-1);
+    expect(restoreRequest).toMatchObject({
+      k: "restore",
+      p: { path: ["ui"], node: { $value: "parent", $children: [["child", { $value: 7, $children: [] }]] } },
+    });
+    socket.deliver({ k: "ack", mid: 9, ns: "app", rid: restoreRequest.mid, p: { mode: "write", revision: 5, event_id: "5", count: 1 } });
+    await expect(restore).resolves.toMatchObject({ revision: 5 });
   });
   test("resets wire message IDs for each reconnect session", async () => {
     const sockets = [];

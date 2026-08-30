@@ -1,0 +1,29 @@
+{
+  "schema": "xo.language-parity",
+  "version": 1,
+  "namespace": "parity",
+  "values": {
+    "null": null,
+    "bool": true,
+    "safe_integer": 9007199254740991,
+    "negative_integer": -42,
+    "float": 3.25,
+    "unicode": "mushroom 🍄 שלום",
+    "bytes": {"$xo": "bytes", "value": "AAEC/w=="},
+    "tuple": {"$xo": "tuple", "value": ["fixed", 7]},
+    "list": [null, false, 2.5, "leaf"],
+    "object": {"nested": {"enabled": true}}
+  },
+  "initial": {
+    "$children": [
+      ["shared", {
+        "$value": "parent",
+        "$children": [
+          ["counter", {"$value": 1, "$children": []}],
+          ["clearable", {"$value": "remove-value", "$children": [["kept", {"$value": true, "$children": []}]]}],
+          ["deletable", {"$value": "remove-node", "$children": []}]
+        ]
+      }]
+    ]
+  }
+}

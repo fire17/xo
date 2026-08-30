@@ -135,3 +135,26 @@ def test_snapshot_is_deterministic_and_keeps_order() -> None:
     assert first == second
     assert b'"namespace":"app"' in first
     assert list(state) == ["z", "a"]
+
+
+def test_install_snapshot_keeps_canonical_root_handle_live() -> None:
+    state = XO("app")
+    state.before = 1
+    state.install_snapshot(
+        {
+            "schema": "xo.snapshot",
+            "version": 1,
+            "namespace": "app",
+            "revision": 7,
+            "root": {
+                "$value": "root",
+                "$children": [["after", {"$value": 2, "$children": []}]],
+            },
+        }
+    )
+
+    assert state.value == "root"
+    assert state.after.value == 2
+    state.live = 3
+    assert state.live.value == 3
+    assert state.revision == 8

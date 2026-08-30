@@ -33,8 +33,21 @@ from ..wire import (
 )
 
 _GUID: Final = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+_MAX_SAFE_INTEGER: Final = (1 << 53) - 1
 _ALLOWED_CLIENT_KINDS: Final = frozenset(
-    {"hello", "sub", "unsub", "set", "delete", "ack", "ping", "pong"}
+    {
+        "hello",
+        "sub",
+        "unsub",
+        "set",
+        "clear",
+        "delete",
+        "restore",
+        "tx",
+        "ack",
+        "ping",
+        "pong",
+    }
 )
 
 
@@ -87,11 +100,27 @@ class WebSocketLimits:
 
 @dataclass(frozen=True, slots=True)
 class BrowserWrite:
-    operation: Operation
-    path: Path
-    value: object
+    operations: tuple[tuple[Operation, Path, object], ...]
     expected_revision: int
     client_origin_id: str
+
+    @property
+    def operation(self) -> Operation:
+        if len(self.operations) != 1:
+            raise AttributeError("transaction write has multiple operations")
+        return self.operations[0][0]
+
+    @property
+    def path(self) -> Path:
+        if len(self.operations) != 1:
+            raise AttributeError("transaction write has multiple paths")
+        return self.operations[0][1]
+
+    @property
+    def value(self) -> object:
+        if len(self.operations) != 1:
+            raise AttributeError("transaction write has multiple values")
+        return self.operations[0][2]
 
 
 WriteCallback = Callable[[BrowserWrite], Event | EventGroup]
@@ -216,17 +245,20 @@ class WebSocketBridge(NullCapability, Observer):
                 "derived event belongs to another namespace",
                 code="xo.protocol.namespace_mismatch",
             )
+        _protocol_safe_value(event.payload)
         with self._lock:
             clients = tuple(self._clients)
         for client in clients:
             client.publish_derived(event)
 
     observe_derived = publish_derived
+
     def _write_root(self, request: BrowserWrite) -> Event | EventGroup:
-        node = self.context.root.at(request.path)
-        if request.operation is Operation.SET_VALUE:
-            return node.set(request.value, expected_revision=request.expected_revision)
-        return node.delete(expected_revision=request.expected_revision)
+        root = self.context.root.at(())
+        plans = tuple(
+            (operation, path, value) for operation, path, value in request.operations
+        )
+        return root.commit_many(plans, expected_revision=request.expected_revision)
 
 
     def close(self) -> None:
@@ -321,6 +353,16 @@ class WebSocketBridge(NullCapability, Observer):
             projected = dict(snapshot)
             projected["root"] = _project_image(snapshot["root"], prefixes)
             projected["head_revision"] = head
+            try:
+                _protocol_safe_value(projected["root"])
+            except ValueError as error:
+                client.enqueue_error(
+                    "xo.codec.integer_out_of_range",
+                    str(error),
+                    request_id=request_id,
+                    detail={"revision": head},
+                )
+                return
             client.enqueue(
                 Envelope(
                     "snapshot",
@@ -478,6 +520,15 @@ class _Connection:
             return
         event = _last_event(item)
         if _item_matches(item, self._prefixes):
+            try:
+                _protocol_safe_item(item)
+            except ValueError as error:
+                self.enqueue_error(
+                    "xo.codec.integer_out_of_range",
+                    str(error),
+                    detail={"revision": event.revision},
+                )
+                return
             self.enqueue(commit_envelope(item, message_id=self.next_message_id()))
         else:
             self.enqueue(
@@ -711,7 +762,7 @@ class _Connection:
                 )
             )
             return
-        if envelope.kind in ("set", "delete"):
+        if envelope.kind in ("set", "clear", "delete", "restore", "tx"):
             self._write(envelope)
             return
         if envelope.kind == "ping":
@@ -737,32 +788,53 @@ class _Connection:
                 close_code=1008,
             )
         payload = _mapping(envelope.payload, "write request")
-        path = self._validated_path(payload.get("path"))
-        if not any(is_prefix(prefix, path) for prefix in self.bridge.writable_prefixes):
-            raise WebSocketProtocolError(
-                "path is outside writable prefixes",
-                code="xo.auth.invalid",
-                close_code=1008,
-            )
         expected = _nonnegative_int(payload.get("expected_revision"), "expected_revision")
-        if envelope.kind == "set":
-            if "value" not in payload:
-                raise WebSocketProtocolError("set request is missing value")
-            operation = Operation.SET_VALUE
-            value = payload["value"]
-            try:
-                self.bridge._codec.dumps(value)
-            except BaseException as error:
-                self.enqueue_error(
-                    "xo.codec.unsupported_type",
-                    str(error),
-                    request_id=envelope.message_id,
+        raw_operations = (
+            payload.get("operations") if envelope.kind == "tx" else [payload]
+        )
+        if not isinstance(raw_operations, list) or not raw_operations:
+            raise WebSocketProtocolError("transaction operations must be a non-empty list")
+        operations: list[tuple[Operation, Path, object]] = []
+        for raw in raw_operations:
+            operation_payload = _mapping(raw, "write operation")
+            kind = operation_payload.get("kind", envelope.kind)
+            if kind not in ("set", "clear", "delete", "restore"):
+                raise WebSocketProtocolError(f"unsupported write operation: {kind!r}")
+            path = self._validated_path(operation_payload.get("path"))
+            if not any(is_prefix(prefix, path) for prefix in self.bridge.writable_prefixes):
+                raise WebSocketProtocolError(
+                    "path is outside writable prefixes",
+                    code="xo.auth.invalid",
+                    close_code=1008,
                 )
-                return
-        else:
-            operation = Operation.DELETE_SUBTREE
-            value = None
-        request = BrowserWrite(operation, path, value, expected, self._origin_id)
+            if kind == "delete" and not path:
+                raise WebSocketProtocolError(
+                    "root cannot be deleted", code="xo.path.invalid", close_code=1008
+                )
+            operation = {
+                "set": Operation.SET_VALUE,
+                "clear": Operation.CLEAR_VALUE,
+                "delete": Operation.DELETE_SUBTREE,
+                "restore": Operation.RESTORE_SUBTREE,
+            }[kind]
+            if kind in ("set", "restore"):
+                field = "value" if kind == "set" else "node"
+                if field not in operation_payload:
+                    raise WebSocketProtocolError(f"{kind} request is missing {field}")
+                value = operation_payload[field]
+                try:
+                    self.bridge._codec.dumps(value)
+                except BaseException as error:
+                    self.enqueue_error(
+                        "xo.codec.unsupported_type",
+                        str(error),
+                        request_id=envelope.message_id,
+                    )
+                    return
+            else:
+                value = None
+            operations.append((operation, path, value))
+        request = BrowserWrite(tuple(operations), expected, self._origin_id)
         try:
             result = self.bridge.write_callback(request)
             if not isinstance(result, Event | EventGroup):
@@ -792,6 +864,7 @@ class _Connection:
                 request_id=envelope.message_id,
             )
             return
+        events = result.events if isinstance(result, EventGroup) else (result,)
         self.enqueue(
             Envelope(
                 "ack",
@@ -801,6 +874,7 @@ class _Connection:
                     "mode": "write",
                     "revision": first.revision,
                     "event_id": format(first.event_id, "x"),
+                    "count": len(events),
                 },
                 reply_to=envelope.message_id,
             )
@@ -996,6 +1070,26 @@ def _last_event(item: Event | EventGroup) -> Event:
 def _item_matches(item: Event | EventGroup, prefixes: tuple[Path, ...]) -> bool:
     events = item.events if isinstance(item, EventGroup) else (item,)
     return any(is_prefix(prefix, event.path) for prefix in prefixes for event in events)
+
+
+def _protocol_safe_item(item: Event | EventGroup) -> None:
+    events = item.events if isinstance(item, EventGroup) else (item,)
+    for event in events:
+        _protocol_safe_value(event.payload)
+
+
+def _protocol_safe_value(value: object) -> None:
+    if isinstance(value, int) and not isinstance(value, bool):
+        if not -_MAX_SAFE_INTEGER <= value <= _MAX_SAFE_INTEGER:
+            raise ValueError("integer exceeds the cross-language safe range")
+        return
+    if isinstance(value, Mapping):
+        for item in value.values():
+            _protocol_safe_value(item)
+        return
+    if isinstance(value, list | tuple):
+        for item in value:
+            _protocol_safe_value(item)
 
 
 def _replay_after(
