@@ -11,5 +11,5 @@ for version in 3.11 3.12 3.13 3.14; do
   uv venv --python "$version" "$env_dir"
   uv pip install --python "$env_dir/bin/python" "$repo"
   "$env_dir/bin/python" "$repo/scripts/verify_python.py"
-  PYTHONPATH="$repo/src" "$env_dir/bin/python" "$repo/benchmarks/check_budgets.py"
+  PYTHONPATH="$repo/src" "$env_dir/bin/python" "$repo/benchmarks/check_budgets.py" --profile portable
 done

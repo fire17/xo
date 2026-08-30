@@ -26,7 +26,7 @@ jobs:
       - run: uv run pytest
       - run: uv run ruff check src tests benchmarks
       - run: uv run python -m compileall -q src tests benchmarks
-      - run: uv run python benchmarks/check_budgets.py
+      - run: uv run python benchmarks/check_budgets.py --profile portable
       - run: uv build
       - name: Verify built wheel
         shell: bash

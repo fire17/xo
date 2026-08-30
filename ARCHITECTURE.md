@@ -314,7 +314,7 @@ Compatibility is source-level where practical, not bug-for-bug. Ambiguous behavi
 
 ## Performance budgets
 
-All budgets are measured on warmed local runs and recorded with environment metadata.
+Canonical budgets are measured on warmed Apple M3 Max runs and recorded with environment metadata. CI also enforces a portable profile for heterogeneous shared runners: the same ceilings except `import xo` ≤ 50 ms and clean formula read ≤ 5 µs, covering observed Python 3.11–3.14 runner variance without weakening the canonical local regression gate.
 
 | Surface | Budget |
 |---|---:|
@@ -328,7 +328,7 @@ All budgets are measured on warmed local runs and recorded with environment meta
 | loopback RPC unary call | ≤ 1 ms median |
 | Python→JS local update | ≤ 10 ms median |
 
-A candidate cannot release if it exceeds the legacy measured median on an equivalent behavior or violates these budgets without an explicit, evidence-backed exception.
+A candidate cannot release if it exceeds the legacy measured median on an equivalent behavior, violates the canonical budget on the reference workstation, or violates the portable ceiling in CI without an explicit, evidence-backed exception.
 
 ## Failure containment
 

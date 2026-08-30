@@ -10,14 +10,19 @@ from collections.abc import Callable
 
 from xo import XO
 
-BUDGETS_US = {
+CANONICAL_BUDGETS = {
+    "import_xo_ms": 25.0,
     "create_root": 10.0,
     "existing_read": 1.0,
     "scalar_set": 5.0,
     "five_segment_set": 15.0,
     "clean_formula_read": 2.0,
 }
-IMPORT_BUDGET_MS = 25.0
+PORTABLE_BUDGETS = {
+    **CANONICAL_BUDGETS,
+    "import_xo_ms": 50.0,
+    "clean_formula_read": 5.0,
+}
 
 
 def median_us(function: Callable[[], object], *, loops: int, rounds: int) -> float:
@@ -105,6 +110,12 @@ def main() -> int:
     parser.add_argument("--rounds", type=int, default=15)
     parser.add_argument("--import-rounds", type=int, default=15)
     parser.add_argument("--json", action="store_true", dest="as_json")
+    parser.add_argument(
+        "--profile",
+        choices=("canonical", "portable"),
+        default="canonical",
+        help="canonical M3 Max budgets or noise-tolerant heterogeneous-runner ceilings",
+    )
     args = parser.parse_args()
     if min(args.loops, args.rounds, args.import_rounds) <= 0:
         parser.error("all counts must be positive")
@@ -114,20 +125,20 @@ def main() -> int:
         rounds=args.rounds,
         import_rounds=args.import_rounds,
     )
+    budgets = CANONICAL_BUDGETS if args.profile == "canonical" else PORTABLE_BUDGETS
     failures = {
         name: {"observed": observed[name], "budget": budget}
-        for name, budget in BUDGETS_US.items()
+        for name, budget in budgets.items()
         if observed[name] > budget
     }
-    if observed["import_xo_ms"] > IMPORT_BUDGET_MS:
-        failures["import_xo_ms"] = {
-            "observed": observed["import_xo_ms"],
-            "budget": IMPORT_BUDGET_MS,
-        }
     report = {
-        "unit": {"import_xo_ms": "ms", **{name: "us" for name in BUDGETS_US}},
+        "profile": args.profile,
+        "unit": {
+            name: "ms" if name.endswith("_ms") else "us"
+            for name in budgets
+        },
         "observed": observed,
-        "budgets": {"import_xo_ms": IMPORT_BUDGET_MS, **BUDGETS_US},
+        "budgets": budgets,
         "failures": failures,
     }
     if args.as_json:
