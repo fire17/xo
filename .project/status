@@ -4,9 +4,9 @@ first_shipped: 2026-08-30
 last_updated: 2026-08-30
 status: published
 repo: https://github.com/fire17/xo
-version: v0.2.2
-channels: github-release,github-pages
+version: v0.2.3
+channels: github-release,github-pages; npm,pypi pending-auth
 last_shipped: 2026-08-30
-jjk_state: st_01m190k7e1er8s2kww495qv4mh
+jjk_state: st_01m1955120ft9vzgk6vtv3z7d5
 validation: ver_01m190kdyjfch85577vq2zab02
 ---
