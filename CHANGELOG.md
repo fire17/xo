@@ -2,6 +2,12 @@
 
 All notable XO changes are recorded here. Versions follow Semantic Versioning.
 
+## 0.2.1 — 2026-08-30
+
+### Fixed
+
+- Split canonical M3 Max performance budgets from portable heterogeneous-runner ceilings so CI catches regressions without treating host variance as product regressions.
+
 ## 0.2.0 — 2026-08-30
 
 ### Added
