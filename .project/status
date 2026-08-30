@@ -1,0 +1,9 @@
+#project v1
+slug: xo
+first_shipped: 2026-08-30
+last_updated: 2026-08-30
+status: published
+repo: https://github.com/fire17/xo
+version: v0.1.0
+channels: github-release,github-pages
+---
