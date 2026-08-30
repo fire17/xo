@@ -1,8 +1,8 @@
 name: Publish JavaScript
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+
 
 permissions:
   contents: read
@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   publish:
-    if: startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     environment:
       name: npm
@@ -23,3 +22,5 @@ jobs:
       - run: bun test js/xo.test.js
       - run: bun pm pack --dry-run
       - run: bun publish --access public
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}

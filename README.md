@@ -16,12 +16,11 @@
 
 ## For AI agents
 
-Install the package, then treat this repository's code and tests—not recalled documentation—as authority.
+Install from the verified GitHub release artifact, then treat this repository's code and tests—not recalled documentation—as authority.
 
 ```bash
-python -m pip install xo-state
+python -m pip install https://github.com/fire17/xo/releases/download/v0.1.0/xo_state-0.1.0-py3-none-any.whl
 ```
-
 | When you are told… | Do this |
 |---|---|
 | “Use XO for local state” | Import `XO`; do not start Redis, RPC, or WebSocket services. |
@@ -58,7 +57,7 @@ That one semantic choice compounds:
 ## Quickstart
 
 ```bash
-python -m pip install xo-state
+python -m pip install https://github.com/fire17/xo/releases/download/v0.1.0/xo_state-0.1.0-py3-none-any.whl
 python - <<'PY'
 from xo import XO
 
