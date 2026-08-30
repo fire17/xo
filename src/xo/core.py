@@ -272,6 +272,7 @@ class XO(MutableMapping[str, "XO"]):
         namespace: str = "default",
         *,
         durability: CapabilitySpec | None = None,
+        services: tuple[CapabilitySpec, ...] = (),
         projections: tuple[CapabilitySpec, ...] = (),
         validation: CapabilitySpec | None = None,
     ) -> XO:
@@ -279,6 +280,7 @@ class XO(MutableMapping[str, "XO"]):
 
         return Profile.hybrid(
             durability=durability,
+            services=services,
             projections=projections,
             validation=validation,
         ).apply(namespace)

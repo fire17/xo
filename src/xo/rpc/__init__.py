@@ -14,7 +14,7 @@ from .protocol import (
     RemoteError,
     RemoteInternalError,
 )
-from .server import Server
+from .server import RPCServer, Server, rpc_server
 
 __all__ = [
     "DEFAULT_CREDIT",
@@ -29,8 +29,10 @@ __all__ = [
     "FrameTooLarge",
     "MalformedMessage",
     "NamespaceMismatch",
+    "RPCServer",
     "RemoteError",
     "RemoteInternalError",
     "Server",
     "Stream",
+    "rpc_server",
 ]

@@ -68,17 +68,27 @@ The core imports only the Python standard library. Optional layers may import si
 The historical sequence `xoBenedict → xoRedis/FreshRedis → xoFunctional`, alongside separate `xoBranch` and `FreshZero` classes, proved individual behaviors but made every new combination depend on inheritance order, shared class globals, and every override calling `super()` correctly. That cannot produce arbitrary safe hybrids. The unified system therefore treats capabilities as root-scoped collaborators over one sealed semantic kernel.
 
 ```python
+from xo import XO, history, rpc_server, service, validation, websocket
+from xo.backends import backend
+from xo.backends.redis import RedisBackend
+
 state = XO.compose(
     "app",
-    History(),
-    Redis(url="redis://127.0.0.1", strict=True),
-    Service(bind="unix:///tmp/app.xo"),
-    WebSocket(bind="127.0.0.1:8765", writable=("ui",)),
-    Validate(PydanticAdapter(AppModel)),
+    validation({"ui.count": lambda value: isinstance(value, int)}),
+    history(),
+    backend(RedisBackend("redis://127.0.0.1:6379/0")),
+    service(),
+    rpc_server("unix:///tmp/app.xo"),
+    websocket(port=8765, writable=(("ui",),)),
 )
 
-# Curated batteries-included profile; same engine, no special hybrid class.
-state = XO.recommended("app", redis="redis://127.0.0.1")
+# Curated profile; every supplied service/bridge is still an ordinary capability.
+state = XO.recommended(
+    "app",
+    durability=backend(RedisBackend("redis://127.0.0.1:6379/0")),
+    services=(rpc_server("unix:///tmp/app.xo"),),
+    projections=(websocket(port=8765, writable=(("ui",),)),),
+)
 ```
 
 `XO()` remains the bare atomic object. `XO.compose(...)` performs a deterministic build and returns that same public type backed by a root `CapabilityRuntime`. A capability is a frozen specification that creates one root-scoped runtime object; child node references never instantiate capabilities. Compatibility constructors such as `FreshRedis`, `xoBranch`, and `FreshZero` may translate legacy arguments into a composition profile, but contain no alternate state implementation.
@@ -114,7 +124,7 @@ The semantic pipeline exposes narrow, typed seams rather than a universal callba
 
 History is an observer plus inverse planner; Redis strict persistence is the commit coordinator plus a remote-event source; RPC service and WebSocket are independent endpoints; validation contributes a pre-commit policy. Formula dependency tracking is a dormant core facility because value reads and invalidation require kernel-level semantics, while observation/export of derived values is a capability. This division allows every useful fusion without allowing extensions to corrupt atomicity.
 
-The recommended profile is data, not another implementation: `History + Redis(strict) + Service + WebSocket`, with formula support available and validation optional. Named profiles are inspectable, serializable configuration *except secrets and callables*, and expand into ordinary specs. Users can replace or add a capability without changing the XO object model.
+The recommended profile is data, not another implementation: `History + Service` by default, plus optional strict durability, RPC/service transports, WebSocket projections, and validation. Named profiles are inspectable configuration *except secrets and callables* and expand into ordinary specs. Users can replace or add a capability without changing the XO object model.
 
 Composition gates:
 
@@ -243,27 +253,25 @@ The old `xoFunctional` (`xo.py:2584-2668`, commit `ca092af`) eagerly ran on ever
 
 ## RPC and microservices
 
-`Service` owns a registry of callable paths.
+`service()` owns one root-scoped registry; `rpc_server()` owns a bounded Unix or loopback TCP listener that serves that same registry.
 
 ```python
-service = Service(state=state)
+from xo import XO, rpc_server, service
+from xo.rpc import Client
 
-@service.expose("image.generate")
-def generate(prompt: str, style: str = "realistic"):
-    ...
+state = XO.compose("app", service(), rpc_server("unix:///tmp/xo.sock"))
 
-# Compatibility with the old expressive decorator:
-@service.public.image.thumbnail
-def thumbnail(image_id: str):
-    ...
+@state.public.image.thumbnail
+def thumbnail(image_id: str) -> str:
+    return f"thumb:{image_id}"
+
+state.start()
+with Client("unix:///tmp/xo.sock", namespace="app") as remote:
+    image = remote.image.thumbnail("42")
+state.close()
 ```
 
-`Server` exposes the registry over TCP loopback or Unix sockets. `Client` produces a dynamic proxy:
-
-```python
-remote = Client("unix:///tmp/xo.sock")
-image = remote.image.generate("sunrise", style="vibrant")
-```
+`Client` produces the dynamic proxy; root close retires RPC connections and the listener with the rest of the capability runtime.
 
 Protocol properties:
 

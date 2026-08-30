@@ -153,7 +153,7 @@ class WebSocketBridge(NullCapability, Observer):
         if len(self.token.encode("utf-8")) < 32:
             raise ValueError("WebSocket token must contain at least 32 UTF-8 bytes")
         if self.writable_prefixes and self.write_callback is None:
-            raise ValueError("writable prefixes require an explicit write callback")
+            self.write_callback = self._write_root
 
     def start(self) -> None:
         with self._lock:
@@ -216,6 +216,12 @@ class WebSocketBridge(NullCapability, Observer):
             client.publish_derived(event)
 
     observe_derived = publish_derived
+    def _write_root(self, request: BrowserWrite) -> Event | EventGroup:
+        node = self.context.root.at(request.path)
+        if request.operation is Operation.SET_VALUE:
+            return node.set(request.value, expected_revision=request.expected_revision)
+        return node.delete(expected_revision=request.expected_revision)
+
 
     def close(self) -> None:
         with self._lock:
@@ -348,8 +354,8 @@ def websocket(
     if not path.startswith("/") or "\r" in path or "\n" in path:
         raise ValueError("WebSocket path must be an absolute HTTP path")
     canonical_writable = tuple(_path_from_wire(value) for value in writable)
-    if canonical_writable and write_callback is None:
-        raise ValueError("writable prefixes require an explicit write callback")
+    # When no callback is supplied, the bridge writes through the root's canonical
+    # mutation pipeline. An explicit callback remains available for custom policy.
     secret = secrets.token_hex(32) if token is None else token
     selected_limits = limits or WebSocketLimits()
     configuration = {
@@ -372,7 +378,7 @@ def websocket(
             path=path,
             limits=selected_limits,
         ),
-        provides=frozenset({"projection", "websocket", "service"}),
+        provides=frozenset({"projection", "websocket"}),
         after=frozenset({"durability", "history"}),
         configuration=configuration,
     )

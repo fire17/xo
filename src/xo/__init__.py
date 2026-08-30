@@ -23,7 +23,7 @@ if TYPE_CHECKING:
         xoBranch,
         xoRedis,
     )
-    from .rpc import Client, Server, Stream
+    from .rpc import Client, RPCServer, Server, Stream, rpc_server
     from .web import (
         BrowserWrite,
         WebSocketBridge,
@@ -108,8 +108,10 @@ _LAZY_EXPORTS = {
     "xoBranch": ("xo.compat", "xoBranch"),
     "xoRedis": ("xo.compat", "xoRedis"),
     "Client": ("xo.rpc", "Client"),
+    "RPCServer": ("xo.rpc", "RPCServer"),
     "Server": ("xo.rpc", "Server"),
     "Stream": ("xo.rpc", "Stream"),
+    "rpc_server": ("xo.rpc", "rpc_server"),
     "BrowserWrite": ("xo.web", "BrowserWrite"),
     "WebSocketBridge": ("xo.web", "WebSocketBridge"),
     "WebSocketLimits": ("xo.web", "WebSocketLimits"),
@@ -191,6 +193,7 @@ __all__ = [
     "Profile",
     "Projection",
     "ProtocolError",
+    "RPCServer",
     "RecoveryRequired",
     "RedisBackend",
     "RedisBackendError",
@@ -225,6 +228,7 @@ __all__ = [
     "projection",
     "pydantic_validation",
     "render_path",
+    "rpc_server",
     "service",
     "validation",
     "websocket",
@@ -233,4 +237,4 @@ __all__ = [
     "xoRedis",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

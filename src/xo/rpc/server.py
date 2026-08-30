@@ -10,6 +10,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path as FilePath
 
+from ..capabilities import BuildContext, CapabilitySpec
 from ..exceptions import BackpressureError, DeadlineExceeded, ProtocolError
 from ..service import ServiceRegistry
 from ..wire import Envelope
@@ -62,6 +63,78 @@ class _StreamState:
                 return False
             self.credit -= 1
             return True
+
+
+class RPCServer:
+    """Root-scoped RPC capability serving the shared Service registry."""
+
+    __slots__ = ("context", "server")
+
+    def __init__(
+        self,
+        context: BuildContext,
+        address: str | tuple[str, int],
+        **options: object,
+    ) -> None:
+        self.context = context
+        services = context.services
+        service_capability = services["service"]
+        registry = service_capability.registry
+        namespace = context.namespace
+        self.server = Server(registry, address, namespace=namespace, **options)
+
+    @property
+    def address(self) -> str | tuple[str, int]:
+        return self.server.address
+
+    @property
+    def active_connections(self) -> int:
+        return self.server.active_connections
+
+    def prepare(self) -> None:
+        pass
+
+    def start(self) -> None:
+        self.server.start()
+
+    def close(self) -> None:
+        self.server.close()
+
+
+def rpc_server(
+    address: str | tuple[str, int],
+    *,
+    key: str = "rpc",
+    max_frame_bytes: int = DEFAULT_MAX_FRAME_BYTES,
+    max_inflight: int = DEFAULT_MAX_INFLIGHT,
+    default_credit: int = DEFAULT_CREDIT,
+    max_stream_queue: int = DEFAULT_MAX_STREAM_QUEUE,
+    io_timeout: float = DEFAULT_TIMEOUT,
+    close_timeout: float = 2.0,
+) -> CapabilitySpec:
+    """Create an inert RPC capability sharing the root service registry."""
+
+    endpoint = parse_endpoint(address)
+    options = {
+        "max_frame_bytes": max_frame_bytes,
+        "max_inflight": max_inflight,
+        "default_credit": default_credit,
+        "max_stream_queue": max_stream_queue,
+        "io_timeout": io_timeout,
+        "close_timeout": close_timeout,
+    }
+    return CapabilitySpec(
+        key=key,
+        factory=lambda context: RPCServer(context, address, **options),
+        provides=frozenset({"rpc"}),
+        requires=frozenset({"service"}),
+        after=frozenset({"service"}),
+        configuration={
+            "address": address,
+            **options,
+            "family": "unix" if endpoint.is_unix else "tcp",
+        },
+    )
 
 
 class Server:

@@ -2,6 +2,19 @@
 
 All notable XO changes are recorded here. Versions follow Semantic Versioning.
 
+## 0.2.0 — 2026-08-30
+
+### Added
+
+- Root-scoped `rpc_server()` capability so allow-listed microservices share XO's capability lifecycle and service registry.
+- Executable architecture-budget gate covering import, root creation, reads, scalar/path writes, and clean formula reads.
+- Full-fusion contract spanning validation, history, strict durability, RPC, WebSocket, and projection observers on one root/revision.
+
+### Changed
+
+- WebSocket writable prefixes now use XO's canonical mutation pipeline by default; custom callbacks remain optional policy hooks.
+- `XO.recommended()` and `Profile.hybrid()` accept explicit service transports alongside durability and projections.
+
 ## 0.1.0 — 2026-08-30
 
 The first unified XO release.

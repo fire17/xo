@@ -7,7 +7,8 @@ import time
 
 import pytest
 
-from xo.rpc import Client, FrameTooLarge, RemoteInternalError, Server
+from xo import XO, rpc_server, service
+from xo.rpc import Client, FrameTooLarge, RemoteInternalError, RPCServer, Server
 from xo.rpc.protocol import DEFAULT_MAX_FRAME_BYTES, make_codec, recv_frame
 from xo.service import ServiceNotFound, ServiceRegistry
 
@@ -40,6 +41,30 @@ def test_dynamic_proxy_ping_describe_and_allow_list(tmp_path) -> None:
         }
         with pytest.raises(ServiceNotFound):
             client.image.private("secret")
+
+def test_rpc_server_is_a_root_scoped_capability(tmp_path) -> None:
+    address = f"unix:///tmp/xo-rpc-{tmp_path.name}-capability.sock"
+    state = XO.compose("app", service(), rpc_server(address))
+
+    @state.public.image.generate
+    def generate(prompt: str) -> str:
+        return f"generated:{prompt}"
+
+    state.start()
+    capability = state.capability("rpc")
+    assert isinstance(capability, RPCServer)
+    try:
+        with Client(address, namespace="app") as client:
+            assert client.image.generate("sunrise") == "generated:sunrise"
+    finally:
+        state.close()
+    assert not socket_path_exists(address)
+
+
+def socket_path_exists(address: str) -> bool:
+    from pathlib import Path
+
+    return Path(address.removeprefix("unix://")).exists()
 
 
 def test_stream_credit_and_early_cancel_cleanup_before_terminal(tmp_path) -> None:

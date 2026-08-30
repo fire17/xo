@@ -26,6 +26,7 @@ class Profile:
         cls,
         *,
         durability: CapabilitySpec | None = None,
+        services: tuple[CapabilitySpec, ...] = (),
         projections: tuple[CapabilitySpec, ...] = (),
         validation: CapabilitySpec | None = None,
         include_history: bool = True,
@@ -40,5 +41,6 @@ class Profile:
             specs.append(durability)
         if include_service:
             specs.append(service())
+        specs.extend(services)
         specs.extend(projections)
         return cls("hybrid", tuple(specs))

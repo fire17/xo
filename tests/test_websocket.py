@@ -7,35 +7,21 @@ import struct
 
 import pytest
 
-from xo import XO, DerivedEvent, Operation
-from xo.web import BrowserWrite, WebSocketBridge, WebSocketLimits, websocket
+from xo import XO, DerivedEvent
+from xo.web import WebSocketBridge, WebSocketLimits, websocket
 from xo.wire import Envelope, decode_envelope, encode_envelope
 
 TOKEN = "t" * 32
 
 
-def _writer(state: XO):
-    def write(request: BrowserWrite):
-        node = state.at(request.path)
-        if request.operation is Operation.SET_VALUE:
-            return node.set(request.value, expected_revision=request.expected_revision)
-        return node.delete(expected_revision=request.expected_revision)
-
-    return write
 
 
 def _start(*, writable: bool = False, limits: WebSocketLimits | None = None):
-    state: XO
-
-    def write(request: BrowserWrite):
-        return _writer(state)(request)
-
     state = XO.compose(
         "app",
         websocket(
             token=TOKEN,
             writable=(["ui"],) if writable else (),
-            write_callback=write if writable else None,
             limits=limits,
         ),
     )
@@ -152,7 +138,7 @@ def test_snapshot_event_tree_and_delete_surface() -> None:
         state.close()
 
 
-def test_browser_writes_require_role_prefix_callback_and_expected_revision() -> None:
+def test_browser_writes_use_canonical_root_pipeline_and_expected_revision() -> None:
     state, bridge = _start(writable=True)
     sock = _connect(bridge)
     try:
@@ -263,8 +249,6 @@ def test_malformed_unmasked_oversize_and_namespace_mismatch_fail_closed() -> Non
         state.close()
 
 
-def test_bridge_refuses_non_loopback_and_unvalidated_write_surface() -> None:
+def test_bridge_refuses_non_loopback() -> None:
     with pytest.raises(ValueError, match="loopback"):
         XO.compose("app", websocket(host="0.0.0.0", token=TOKEN))
-    with pytest.raises(ValueError, match="write callback"):
-        XO.compose("app", websocket(token=TOKEN, writable=(["ui"],)))

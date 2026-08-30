@@ -5,7 +5,7 @@
   [![Release](https://img.shields.io/github/v/release/fire17/xo?color=64dcff)](https://github.com/fire17/xo/releases)
   [![Python](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776ab)](https://github.com/fire17/xo/actions/workflows/ci.yml)
   [![Core dependencies](https://img.shields.io/badge/core%20dependencies-0-7e57c2)](pyproject.toml)
-  [![Python contracts](https://img.shields.io/badge/Python%20contracts-84-2ea44f)](tests)
+  [![Python contracts](https://img.shields.io/badge/Python%20contracts-87-2ea44f)](tests)
   [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
   [![GitHub stars](https://img.shields.io/github/stars/fire17/xo?style=social)](https://github.com/fire17/xo/stargazers)
 
@@ -16,17 +16,17 @@
 
 ## For AI agents
 
-Install from the verified GitHub release artifact, then treat this repository's code and tests—not recalled documentation—as authority.
+Install from the verified GitHub release artifact, then treat this repository's code and tests—not recalled documentation—as authority. The commands below target the staged v0.2.0 update and become public after its release gate completes.
 
 ```bash
-python -m pip install https://github.com/fire17/xo/releases/download/v0.1.0/xo_state-0.1.0-py3-none-any.whl
+python -m pip install https://github.com/fire17/xo/releases/download/v0.2.0/xo_state-0.2.0-py3-none-any.whl
 ```
 | When you are told… | Do this |
 |---|---|
 | “Use XO for local state” | Import `XO`; do not start Redis, RPC, or WebSocket services. |
 | “Make this durable” | Compose `backend(RedisBackend(...))`; start and close the root explicitly. |
-| “Expose a service” | Register only named callables in `ServiceRegistry`; never expose arbitrary attributes. |
-| “Sync with JavaScript” | Scope readable and writable prefixes explicitly; keep formula projections derived. |
+| “Expose a service” | Compose `service()` + `rpc_server(address)`; register only named callables through `state.public`. |
+| “Sync with JavaScript” | Compose `websocket(...)`; scope readable and writable prefixes explicitly. Writable paths use XO's canonical mutation pipeline. |
 | “Recover old XO behavior” | Use `xo.compat`; rejected unsafe options are intentional migration errors. |
 
 Three rules: read current APIs from `src/xo/`; inspect exact contracts in `tests/`; never replace an explicit persistence or protocol failure with a silent local fallback.
@@ -57,7 +57,7 @@ That one semantic choice compounds:
 ## Quickstart
 
 ```bash
-python -m pip install https://github.com/fire17/xo/releases/download/v0.1.0/xo_state-0.1.0-py3-none-any.whl
+python -m pip install https://github.com/fire17/xo/releases/download/v0.2.0/xo_state-0.2.0-py3-none-any.whl
 python - <<'PY'
 from xo import XO
 
@@ -113,8 +113,8 @@ An authored mutation resolves a path, validates and normalizes a commit plan, co
 | Validation | `XO.compose("app", validation({...}))` | [Capability fusion](ARCHITECTURE.md#capability-fusion--composition-not-inheritance) |
 | History | `history_runtime.undo()` | [Revision history](ARCHITECTURE.md#revision-history) |
 | Redis | `backend(RedisBackend(...))` | [Redis backend](ARCHITECTURE.md#redis-backend) |
-| Services/RPC | `@registry.public.image.thumbnail` | [RPC and microservices](ARCHITECTURE.md#rpc-and-microservices) |
-| Browser sync | `createXO({ url, namespace, … })` | [Python ↔ JavaScript](ARCHITECTURE.md#python--javascript-sync) |
+| Services/RPC | `service()` + `rpc_server(address)` | [RPC and microservices](ARCHITECTURE.md#rpc-and-microservices) |
+| Browser sync | `websocket(writable=(("ui",),))` + `createXO(...)` | [Python ↔ JavaScript](ARCHITECTURE.md#python--javascript-sync) |
 | Compatibility | `Fresh`, `FreshRedis`, `FreshZero`, `xoBranch` | [Compatibility surface](ARCHITECTURE.md#compatibility-surface) |
 | CLI | `xo inspect`, `doctor`, `benchmark`, `serve` | `xo --help` |
 
@@ -142,22 +142,20 @@ XO speaks bounded RESP directly and uses an atomic Lua compare-and-swap for each
 <summary><b>Local services and bounded RPC</b></summary>
 
 ```python
-from xo import XO, service
-from xo.rpc import Client, Server
+from xo import XO, rpc_server, service
+from xo.rpc import Client
 
-app = XO.compose("app", service())
-registry = app.capability("service").registry
+address = "unix:///tmp/app.xo"
+app = XO.compose("app", service(), rpc_server(address))
 
-@registry.public.image.thumbnail
+@app.public.image.thumbnail
 def thumbnail(image_id: str) -> str:
     return f"thumb:{image_id}"
 
-server = Server(registry, "unix:///tmp/app.xo")
-server.start()
-client = Client("unix:///tmp/app.xo", namespace="app")
-assert client.image.thumbnail("42") == "thumb:42"
-client.close()
-server.close()
+app.start()
+with Client(address, namespace="app") as client:
+    assert client.image.thumbnail("42") == "thumb:42"
+app.close()
 ```
 
 RPC uses versioned JSON frames, allow-listed dispatch, deadlines, cancellation, and credit-controlled streaming. Version 1 binds only Unix sockets or loopback TCP.
@@ -215,13 +213,13 @@ PYTHONPATH=src python benchmarks/benchmark_core.py --loops 100000 --rounds 15
 | Legacy `pickle`, `dill`, `eval`, or port takeover | Compatibility error, not emulation | Migrate to tagged JSON, registry calls, explicit addresses |
 
 > [!WARNING]
-> XO 0.1.0 is a new unified contract. Historical prototypes remain evidence, not a promise of bug-for-bug compatibility.
+> XO 0.2.0 is a new unified contract. Historical prototypes remain evidence, not a promise of bug-for-bug compatibility.
 
 ## Claims with receipts
 
 | Gate | Observed result |
 |---|---|
-| Python behavioral contracts | **84 collected; 83 passed, 1 disposable-Redis test skipped without `XO_TEST_REDIS_URL`** |
+| Python behavioral contracts | **87 collected; 86 passed, 1 disposable-Redis test skipped without `XO_TEST_REDIS_URL`** |
 | Real Redis integration | Dedicated loopback Redis server; integration scenario passed |
 | JavaScript peer | **4 tests, 19 assertions, 0 failures** |
 | Static checks | Ruff clean; Python bytecode compilation clean; Node syntax check clean |
