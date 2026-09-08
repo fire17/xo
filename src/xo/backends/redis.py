@@ -177,7 +177,7 @@ class RedisBackend:
     """Strict stdlib RESP Redis CAS persistence and namespace replication.
 
     Construction is inert. ``prepare`` owns the command connection, while
-    ``start_listener`` explicitly starts the one non-daemon Pub/Sub listener.
+    ``start_listener`` explicitly starts the one daemon Pub/Sub listener.
     Redis Streams remain authoritative; Pub/Sub is only a low-latency wake-up.
     """
 
@@ -823,7 +823,16 @@ class RedisBackend:
         thread = threading.Thread(
             target=self._listener_main,
             name=f"xo-redis-{self._namespace}",
-            daemon=False,
+            # DAEMON, since 2026-09-08. A non-daemon listener makes every short-lived client
+            # immortal: the interpreter's shutdown joins this thread, the thread is parked in
+            # read_response on the Pub/Sub socket, and nothing ever sets the stop flag, so the
+            # process lives forever holding two connections and a share of a core. Six such
+            # orphans were counted on one machine in one morning (`mm status` 4h49m,
+            # `mm vision off` 2h51m, keeper one-shots, a 45-second probe that lived 7 hours),
+            # every one of them stuck in _Py_Finalize -> ThreadHandle_join on this thread.
+            # Losing the listener at exit costs nothing: Redis Streams stay authoritative and
+            # writes go through the COMMAND connection, so Pub/Sub is only a wake-up.
+            daemon=True,
         )
         self._listener = thread
         thread.start()
