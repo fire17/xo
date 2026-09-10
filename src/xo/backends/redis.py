@@ -720,7 +720,7 @@ class RedisBackend:
                 self._query(
                     "XRANGE",
                     self._keys.log,
-                    f"({revision}-0",
+                    f"{revision}-1",  # Inclusive successor; Redis 5 lacks exclusive ranges.
                     "+",
                     "COUNT",
                     self.limits.catchup_batch,

@@ -244,6 +244,74 @@ def test_gap_requires_explicit_snapshot_sink_instead_of_local_fallback() -> None
         backend.catch_up()
 
 
+class Redis5StreamCommand(FakeCommand):
+    """Minimal Redis 5 range semantics: inclusive IDs, no '(' range syntax."""
+
+    def __init__(self, entries: list[list[object]], *, head: int) -> None:
+        super().__init__([])
+        self.entries = entries
+        self.head = head
+
+    def execute(self, *parts: object) -> object:
+        self.commands.append(parts)
+        if parts[0] == "GET":
+            return str(self.head).encode()
+        assert parts[0] == "XRANGE", parts
+        start = str(parts[2])
+        if start.startswith("("):
+            raise redis_module._RESPError(
+                "ERR Invalid stream ID specified as stream command argument"
+            )
+        minimum = tuple(int(component) for component in start.split("-"))
+        assert parts[3:5] == ("+", "COUNT")
+        selected = [
+            entry for entry in self.entries
+            if tuple(int(component) for component in entry[0].decode().split("-")) >= minimum
+        ]
+        return selected[:int(parts[5])]
+
+
+@pytest.mark.parametrize("checkpoint", [0, 2])
+def test_redis5_catch_up_pages_without_duplicates(checkpoint: int) -> None:
+    changes = [
+        event(event_id=0xA0 + revision, base_revision=revision - 1, revision=revision)
+        for revision in range(1, 6)
+    ]
+    backend, _ = ready_backend(remote_revision=checkpoint)
+    backend._command = Redis5StreamCommand([stream_entry(item) for item in changes], head=5)
+    backend.limits = RedisLimits(catchup_batch=2)
+    received: list[Event | EventGroup] = []
+    backend.set_remote_sink(received.append, revision=checkpoint)
+
+    assert backend.catch_up() == 5
+    assert received == changes[checkpoint:]
+    assert backend.catch_up() == 5
+    assert received == changes[checkpoint:]
+
+
+def test_redis5_catch_up_does_not_skip_invalid_sequence_after_checkpoint() -> None:
+    malformed = stream_entry(event())
+    malformed[0] = b"1-1"
+    next_change = event(event_id=0xBB, base_revision=1, revision=2)
+    backend, _ = ready_backend(remote_revision=1)
+    backend._command = Redis5StreamCommand([malformed, stream_entry(next_change)], head=2)
+    backend.set_remote_sink(lambda _: None, revision=1)
+
+    # Using revision+1-0 would incorrectly skip the corrupt sequence record.
+    with pytest.raises(RedisProtocolError, match="unexpected XO Redis stream id"):
+        backend.catch_up()
+
+
+def test_redis5_catch_up_preserves_gap_recovery() -> None:
+    change = event(event_id=0xCC, base_revision=2, revision=3)
+    backend, _ = ready_backend(remote_revision=1)
+    backend._command = Redis5StreamCommand([stream_entry(change)], head=3)
+    backend.set_remote_sink(lambda _: None, revision=1)
+
+    with pytest.raises(RecoveryRequired, match="snapshot sink"):
+        backend.catch_up()
+
+
 def test_resp_reader_enforces_frame_array_and_nesting_limits() -> None:
     class FakeSocket:
         def __init__(self, response: bytes) -> None:
@@ -300,4 +368,30 @@ def test_optional_real_redis_round_trip() -> None:
         assert writer.commit(change) == "1-0"
         assert writer.reconcile(change) is True
     finally:
+        writer.close()
+
+
+def test_optional_real_redis_catch_up_pagination() -> None:
+    url = os.environ.get("XO_TEST_REDIS_URL")
+    if not url:
+        pytest.skip("set XO_TEST_REDIS_URL to a disposable Redis 5 or newer server")
+    namespace = f"xo-test-{secrets.token_hex(8)}"
+    writer = RedisBackend(url, namespace=namespace, epoch=namespace)
+    reader = RedisBackend(url, namespace=namespace, limits=RedisLimits(catchup_batch=2))
+    received: list[Event | EventGroup] = []
+    reader.set_remote_sink(received.append)
+    try:
+        writer.prepare()
+        for revision in range(1, 6):
+            change = event(
+                event_id=0xA0 + revision, base_revision=revision - 1, revision=revision
+            )
+            object.__setattr__(change, "namespace", namespace)
+            writer.commit(change)
+        assert reader.catch_up() == 5
+        assert [item.revision for item in received] == [1, 2, 3, 4, 5]
+        assert reader.catch_up() == 5
+        assert len(received) == 5
+    finally:
+        reader.close()
         writer.close()
